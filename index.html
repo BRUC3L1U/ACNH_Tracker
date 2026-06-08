@@ -92,7 +92,7 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .tag-shadow{background:var(--color-accent-warm);color:#5a3a1a}
 .tag-price{color:var(--color-text-muted);font-weight:700;font-size:13px;white-space:nowrap}
 .check-box{width:28px;height:28px;border-radius:var(--radius-sm);border:2px solid var(--color-border);display:flex;align-items:center;justify-content:center;transition:all .3s;flex-shrink:0;margin-top:2px}
-.check-box::after{content:'\\2713';color:#fff;font-size:16px;opacity:0;transition:opacity .3s}
+.check-box::after{content:'\2713';color:#fff;font-size:16px;opacity:0;transition:opacity .3s;font-weight:700}
 .creature-meta{grid-column:1/-1;display:flex;flex-direction:column;gap:4px}
 .meta-row{font-size:11px;color:var(--color-text-muted);display:flex;align-items:center;gap:2px}
 .heat-cell{width:22px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;font-size:10px;background:var(--color-bg);color:var(--color-text-muted);transition:all .15s}
@@ -136,7 +136,7 @@ const state = {
     bug:  { location:[], weather:[], month:null, hour:null, status:'all', search:'' },
     sea:  { shadowSize:[], month:null, hour:null, status:'all', search:'' }
   },
-  sort: { key: 'name', dir: 'asc' },
+  sort: { key: null, dir: 'asc' },
   todayOpen: true,
   filterOpen: false
 };
@@ -167,13 +167,13 @@ function isLeavingNextMonth(item) {
 
 function getTimeRangeLabel(hours) {
   if (hours.length === 24) return '全天';
-  const r = [];
-  let s = hours[0], e = hours[0];
-  for (let i = 1; i < hours.length; i++) {
+  var r = [];
+  var s = hours[0], e = hours[0];
+  for (var i = 1; i < hours.length; i++) {
     if (hours[i] === e + 1) { e = hours[i]; }
-    else { r.push(s === e ? s+'时' : s+'-'+e+'时'); s = hours[i]; e = hours[i]; }
+    else { r.push(s === e ? s + '时' : s + '-' + e + '时'); s = hours[i]; e = hours[i]; }
   }
-  r.push(s === e ? s+'时' : s+'-'+e+'时');
+  r.push(s === e ? s + '时' : s + '-' + e + '时');
   return r.join(' / ');
 }
 
@@ -211,21 +211,23 @@ function applyFilters(data, tab) {
 
   const sk = state.sort.key;
   const sd = state.sort.dir === 'asc' ? 1 : -1;
-  items.sort((a, b) => {
-    if (sk === 'name') return sd * a.name.localeCompare(b.name, 'zh');
-    if (sk === 'price') return sd * (a.price - b.price);
-    if (sk === 'collected') {
-      const ca = state.collected.has(a.id) ? 1 : 0;
-      const cb = state.collected.has(b.id) ? 1 : 0;
-      return sd * (ca - cb);
-    }
-    if (sk === 'rarity') {
-      const ma = state.hemisphere==='north'?a.northMonths.length:a.southMonths.length;
-      const mb = state.hemisphere==='north'?b.northMonths.length:b.southMonths.length;
-      return sd * (ma - mb);
-    }
-    return 0;
-  });
+  if (sk) {
+    items.sort((a, b) => {
+      if (sk === 'name') return sd * a.name.localeCompare(b.name, 'zh');
+      if (sk === 'price') return sd * (a.price - b.price);
+      if (sk === 'collected') {
+        const ca = state.collected.has(a.id) ? 1 : 0;
+        const cb = state.collected.has(b.id) ? 1 : 0;
+        return sd * (ca - cb);
+      }
+      if (sk === 'rarity') {
+        const ma = state.hemisphere==='north'?a.northMonths.length:a.southMonths.length;
+        const mb = state.hemisphere==='north'?b.northMonths.length:b.southMonths.length;
+        return sd * (ma - mb);
+      }
+      return 0;
+    });
+  }
 
   return items;
 }
@@ -264,7 +266,7 @@ function renderTodayPanel() {
     sea: nowAvailable.filter(x => x.type==='sea')
   };
 
-  let html = '<div class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader"><h3><span class="arrow">▶</span> 🔔 今日可捕捉 （'+monStr+' '+hour+'时）</h3><span style="font-size:13px;color:var(--color-text-muted)">'+nowAvailable.length+' 种生物可捕捉</span></div>';
+  let html = '<div class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader"><h3><span class="arrow">▶</span> 今日可捕捉 （'+monStr+' '+hour+'时）</h3><span style="font-size:13px;color:var(--color-text-muted)">'+nowAvailable.length+' 种生物可捕捉</span></div>';
   html += '<div class="today-body'+(state.todayOpen?' open':'')+'">';
   html += '<div class="today-info"><span>当前半球：</span><button class="hemi-btn'+(state.hemisphere==='north'?' active':'')+'" id="hemiNorth">北半球</button><button class="hemi-btn'+(state.hemisphere==='south'?' active':'')+'" id="hemiSouth">南半球</button><span style="color:var(--color-text-muted);font-size:12px">（可切换）</span></div>';
 
@@ -278,11 +280,11 @@ function renderTodayPanel() {
         const warn = isLeavingNextMonth(item) ? ' <span class="warn">⚠️ 本月即将消失</span>' : '';
         const timeLabel = getTimeRangeLabel(item.hours);
         if (t === 'fish') {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">🔔 '+item.price+'</span>'+warn+'</div>';
+          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
         } else if (t === 'bug') {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">🔔 '+item.price+'</span>'+warn+'</div>';
+          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
         } else {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">🔔 '+item.price+'</span>'+warn+'</div>';
+          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
         }
       });
     }
@@ -448,7 +450,7 @@ function renderList() {
     if (item.shadowSize) {
       html += '<span class="tag tag-shadow">'+item.shadowSize+'</span>';
     }
-    html += '<span class="tag-price">🔔 '+item.price+'</span>';
+    html += '<span class="tag-price">'+item.price+' 铃钱</span>';
     html += '</div>';
 
     html += '<div class="creature-meta">';
