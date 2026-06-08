@@ -356,7 +356,6 @@ function renderFilters() {
   for (let m = 1; m <= 12; m++) {
     html += '<button class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' month-current':'')+'" data-filter="month" data-value="'+m+'">'+m+'</button>';
   }
-  html += '<button class="filter-btn" data-filter="month" data-value="cur" style="font-size:12px">当前月('+curMon+')</button>';
   html += '</div></div>';
 
   html += '<div class="filter-row"><span class="filter-label">出现时间</span><div class="filter-options" id="hourGrid">';
@@ -398,11 +397,7 @@ function renderFilters() {
         const idx = arr.indexOf(value);
         idx >= 0 ? arr.splice(idx,1) : arr.push(value);
       } else if (filter === 'month') {
-        if (value === 'cur') {
-          state.filters[tab].month = state.filters[tab].month === curMon ? null : curMon;
-        } else {
-          state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
-        }
+        state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
       } else if (filter === 'hour') {
         if (value === 'all') {
           state.filters[tab].hour = state.filters[tab].hour === 'all' ? null : 'all';
