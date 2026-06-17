@@ -381,6 +381,11 @@ function renderFilters() {
   let html = '<button class="filter-toggle-btn" id="filterToggle">🔍 筛选条件</button>';
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'">';
 
+  html += '<div class="filter-row"><span class="filter-label">半球</span><div class="filter-options">';
+  html += '<button class="filter-btn'+(state.hemisphere==='north'?' active':'')+'" data-hemi="north">北半球</button>';
+  html += '<button class="filter-btn'+(state.hemisphere==='south'?' active':'')+'" data-hemi="south">南半球</button>';
+  html += '</div></div>';
+
   html += '<div class="filter-row"><span class="filter-label">收集状态</span><div class="filter-options">';
   for (const [val,label] of [['all','全部'],['uncollected','未收集'],['collected','已收集']]) {
     html += '<button class="filter-btn'+(f.status===val?' active':'')+'" data-filter="status" data-value="'+val+'">'+label+'</button>';
@@ -436,6 +441,14 @@ function renderFilters() {
   document.getElementById('filterToggle').addEventListener('click', () => {
     state.filterOpen = !state.filterOpen;
     renderFilters();
+  });
+
+  document.querySelectorAll('#filterBar .filter-btn[data-hemi]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.hemisphere = btn.dataset.hemi;
+      saveHemisphere();
+      renderAll();
+    });
   });
 
   document.querySelectorAll('#filterBar .filter-btn[data-filter]').forEach(btn => {
