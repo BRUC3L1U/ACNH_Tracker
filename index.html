@@ -78,6 +78,9 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
   .navbar{padding:0 8px}
   .nav-tab{padding:8px 6px;font-size:12px}
   .nav-title{font-size:11px}
+  .heat-cell{width:20px;height:18px;font-size:9px}
+  .heat-cell-hour{width:15px;height:15px;font-size:8px}
+  .meta-row{flex-wrap:wrap;row-gap:4px}
 }
 
 .list-section{background:var(--color-surface);border-radius:var(--radius-card);overflow:hidden;box-shadow:0 2px 8px var(--color-shadow)}
@@ -102,6 +105,7 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .heat-cell{width:22px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;font-size:10px;background:var(--color-bg);color:var(--color-text-muted);transition:all .15s}
 .heat-cell.on{background:var(--color-primary);color:#fff}
 .heat-cell.current{border:2px solid var(--color-accent-warm)}
+.heat-cell-hour{width:18px;height:18px;font-size:9px}
 .empty-state{padding:40px;text-align:center;color:var(--color-text-muted);font-size:15px}
 </style>
 </head>
@@ -525,7 +529,7 @@ function renderList() {
     html += '<div class="meta-row"><span style="min-width:40px;font-size:11px">时:</span>';
     const curHr = getLocalTime().getHours();
     for (let h = 0; h < 24; h++) {
-      html += '<span class="heat-cell'+(item.hours.includes(h)?' on':'')+(h===curHr?' current':'')+'" style="width:18px;height:18px;font-size:9px">'+h+'</span>';
+      html += '<span class="heat-cell heat-cell-hour'+(item.hours.includes(h)?' on':'')+(h===curHr?' current':'')+'">'+h+'</span>';
     }
     html += '</div></div>';
     html += '</div>';
