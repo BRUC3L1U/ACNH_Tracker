@@ -151,11 +151,6 @@ function applyFilters(data, tab) {
         const cb = state.collected.has(b.id) ? 1 : 0;
         return sd * (ca - cb);
       }
-      if (sk === 'rarity') {
-        const ma = state.hemisphere==='north'?a.northMonths.length:a.southMonths.length;
-        const mb = state.hemisphere==='north'?b.northMonths.length:b.southMonths.length;
-        return sd * (ma - mb);
-      }
       return 0;
     });
   }
@@ -371,7 +366,7 @@ function renderList() {
   const filtered = applyFilters(data, tab);
 
   let html = '<div class="list-header">';
-  const sortKeys = [{key:'name',label:'名称'},{key:'price',label:'价格'},{key:'collected',label:'收集'},{key:'rarity',label:'稀有度'}];
+  const sortKeys = [{key:'name',label:'名称'},{key:'price',label:'价格'},{key:'collected',label:'收集'}];
   sortKeys.forEach(sk => {
     const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
     html += '<span class="sortable" data-sort="'+sk.key+'">'+sk.label+'</span><span style="font-size:10px">'+arrow+'</span> ';
