@@ -132,10 +132,7 @@ const TAB_NAMES = { bug: '虫', fish: '鱼', sea: '海洋生物' };
 
 const state = {
   activeTab: 'bug',
-  hemisphere: (() => {
-    const m = document.cookie.split(';').find(c => c.trim().startsWith('acnh_hemisphere='));
-    return m && m.split('=').slice(1).join('=').trim() === 'south' ? 'south' : 'north';
-  })(),
+  hemisphere: localStorage.getItem('acnh_hemisphere') === 'south' ? 'south' : 'north',
   collected: loadCollected(),
   filters: {
     fish: { location:[], shadowSize:[], month:null, hour:null, status:'all', search:'' },
@@ -205,8 +202,7 @@ function importCollected(e) {
 }
 
 function saveHemisphere() {
-  const exp = new Date(Date.now() + 365*24*3600*1000).toUTCString();
-  document.cookie = 'acnh_hemisphere=' + state.hemisphere + ';expires=' + exp + ';path=/;SameSite=Lax';
+  try { localStorage.setItem('acnh_hemisphere', state.hemisphere); } catch {}
 }
 
 function getLocalTime() { return new Date(); }
