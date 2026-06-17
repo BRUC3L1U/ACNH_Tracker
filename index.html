@@ -599,7 +599,26 @@ document.getElementById('navTabs').addEventListener('click', e => {
   renderAll();
 });
 
-setInterval(() => { renderTodayPanel(); }, 60000);
+let lastTickMinute = null;
+let lastTickHour = null;
+setInterval(() => {
+  const now = getLocalTime();
+  const minute = now.getMinutes();
+  const hour = now.getHours();
+  // Re-render the today panel only when the minute actually changed; the
+  // interval can fire late or the tab may be backgrounded, so guard against
+  // no-op rebuilds that destroy/rebind DOM for nothing.
+  if (minute !== lastTickMinute) {
+    lastTickMinute = minute;
+    renderTodayPanel();
+  }
+  // When the hour rolls over, the list's current-hour highlight goes stale —
+  // refresh it too (month boundary handled by getDate in the panel render).
+  if (hour !== lastTickHour) {
+    lastTickHour = hour;
+    renderList();
+  }
+}, 60000);
 
 renderDataBar();
 renderAll();
