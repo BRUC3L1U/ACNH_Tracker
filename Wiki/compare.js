@@ -1,21 +1,18 @@
-// Compare index.html data against BWIKI saved pages.
+// Compare data.js against BWIKI saved pages.
 // Run: node Wiki/compare.js
 const fs = require('fs');
 const path = require('path');
 
 const WIKI_DIR = path.join(__dirname);
-const INDEX = path.join(__dirname, '..', 'index.html');
+const DATA_FILE = path.join(__dirname, '..', 'data.js');
 
-// ---- Load data arrays from index.html ----
-const html = fs.readFileSync(INDEX, 'utf8');
-function extractArr(name) {
-  const m = html.match(new RegExp('const ' + name + '=\\[(.+?)\\];const ', 's'));
-  if (!m) throw new Error('cannot find ' + name);
-  return JSON.parse('[' + m[1] + ']');
-}
-const FISH = extractArr('FISH_DATA');
-const BUG = extractArr('BUG_DATA');
-const SEA = extractArr('SEA_DATA');
+// ---- Load data arrays from data.js (eval into a sandbox object) ----
+const dataSrc = fs.readFileSync(DATA_FILE, 'utf8');
+const sandbox = {};
+new Function('sandbox', dataSrc + ';Object.assign(sandbox,{FISH_DATA,BUG_DATA,SEA_DATA});')(sandbox);
+const FISH = sandbox.FISH_DATA;
+const BUG = sandbox.BUG_DATA;
+const SEA = sandbox.SEA_DATA;
 
 // ---- Parse a wiki page into rows ----
 function parseWiki(file) {
