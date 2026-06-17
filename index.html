@@ -35,6 +35,9 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .progress-pct{font-size:20px;font-weight:700;color:var(--color-primary-dark)}
 .progress-bar{height:12px;background:var(--color-bg);border-radius:6px;overflow:hidden}
 .progress-fill{height:100%;background:linear-gradient(90deg,var(--color-primary),var(--color-primary-dark));border-radius:6px;transition:width .4s ease}
+.data-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px}
+.data-btn{padding:5px 12px;border-radius:var(--radius-sm);border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-size:13px;transition:all .15s;box-shadow:0 2px 8px var(--color-shadow)}
+.data-btn:hover{border-color:var(--color-primary);color:var(--color-primary)}
 
 .today-panel{background:var(--color-surface);border-radius:var(--radius-card);margin-bottom:16px;box-shadow:0 2px 8px var(--color-shadow);overflow:hidden}
 .today-header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;cursor:pointer;user-select:none;border-bottom:1px solid transparent}
@@ -113,6 +116,7 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 
 <div class="main">
   <div class="progress-section" id="progressSection"></div>
+  <div class="data-bar" id="dataBar"></div>
   <div class="today-panel" id="todayPanel"></div>
   <div class="filter-bar" id="filterBar"></div>
   <div class="list-section" id="listSection"></div>
@@ -128,12 +132,7 @@ const state = {
     const m = document.cookie.split(';').find(c => c.trim().startsWith('acnh_hemisphere='));
     return m && m.split('=').slice(1).join('=').trim() === 'south' ? 'south' : 'north';
   })(),
-  collected: (() => {
-    const m = document.cookie.split(';').find(c => c.trim().startsWith('acnh_collected='));
-    if (!m) return new Set();
-    try { return new Set(JSON.parse(decodeURIComponent(m.split('=').slice(1).join('=')))); }
-    catch { return new Set(); }
-  })(),
+  collected: loadCollected(),
   filters: {
     fish: { location:[], shadowSize:[], month:null, hour:null, status:'all', search:'' },
     bug:  { location:[], weather:[], month:null, hour:null, status:'all', search:'' },
@@ -144,10 +143,61 @@ const state = {
   filterOpen: false
 };
 
+function loadCollected() {
+  try {
+    const s = localStorage.getItem('acnh_collected');
+    if (s) return new Set(JSON.parse(s));
+  } catch {}
+  // Migrate from the legacy cookie (one-time), then clear it.
+  const m = document.cookie.split(';').find(c => c.trim().startsWith('acnh_collected='));
+  if (m) {
+    try {
+      const arr = JSON.parse(decodeURIComponent(m.split('=').slice(1).join('=')));
+      const set = new Set(arr);
+      try { localStorage.setItem('acnh_collected', JSON.stringify(arr)); } catch {}
+      document.cookie = 'acnh_collected=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax';
+      return set;
+    } catch {}
+  }
+  return new Set();
+}
+
 function saveCollected() {
-  const json = JSON.stringify([...state.collected]);
-  const exp = new Date(Date.now() + 365*24*3600*1000).toUTCString();
-  document.cookie = 'acnh_collected=' + encodeURIComponent(json) + ';expires=' + exp + ';path=/;SameSite=Lax';
+  try { localStorage.setItem('acnh_collected', JSON.stringify([...state.collected])); } catch {}
+}
+
+function exportCollected() {
+  const data = { version: 1, collected: [...state.collected] };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'acnh-collected.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importCollected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const arr = Array.isArray(parsed) ? parsed : parsed.collected;
+      if (!Array.isArray(arr)) throw new Error('文件格式不正确');
+      state.collected = new Set(arr);
+      saveCollected();
+      renderAll();
+      alert('导入成功，共 ' + state.collected.size + ' 条记录');
+    } catch (err) {
+      alert('导入失败：' + err.message);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 function saveHemisphere() {
@@ -501,11 +551,20 @@ function renderList() {
       const id = el.dataset.id;
       if (state.collected.has(id)) {
         state.collected.delete(id);
+        el.classList.remove('collected');
       } else {
         state.collected.add(id);
+        el.classList.add('collected');
       }
       saveCollected();
-      renderAll();
+      renderProgress();
+      // When a status filter or collected-sort is active, the item must
+      // (dis)appear or reorder — fall back to a list rebuild. Otherwise the
+      // in-place class toggle above is enough and avoids losing scroll/focus.
+      const f = state.filters[state.activeTab];
+      if (f.status !== 'all' || state.sort.key === 'collected') {
+        renderList();
+      }
     });
   });
 }
@@ -518,6 +577,16 @@ function renderAll() {
   renderList();
 }
 
+function renderDataBar() {
+  document.getElementById('dataBar').innerHTML =
+    '<button class="data-btn" id="exportBtn">导出收集记录</button>' +
+    '<button class="data-btn" id="importBtn">导入收集记录</button>' +
+    '<input type="file" id="importFile" accept="application/json" style="display:none">';
+  document.getElementById('exportBtn').addEventListener('click', exportCollected);
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', importCollected);
+}
+
 document.getElementById('navTabs').addEventListener('click', e => {
   const btn = e.target.closest('.nav-tab');
   if (!btn) return;
@@ -528,6 +597,7 @@ document.getElementById('navTabs').addEventListener('click', e => {
 
 setInterval(() => { renderTodayPanel(); }, 60000);
 
+renderDataBar();
 renderAll();
 </script>
 </body>
