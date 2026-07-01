@@ -486,10 +486,15 @@ setInterval(() => {
     lastTickMinute = minute;
     renderTodayPanel();
   }
-  // When the hour rolls over, the list's current-hour highlight goes stale —
-  // refresh it too (month boundary handled by getDate in the panel render).
+  // When the hour rolls over, auto-select the current hour in the filter
+  // and refresh both the filter bar highlight and the list.
   if (hour !== lastTickHour) {
     lastTickHour = hour;
+    const tab = state.activeTab;
+    if (state.filters[tab]) {
+      state.filters[tab].hour = hour;
+    }
+    renderFilters();
     renderList();
   }
 }, 60000);
