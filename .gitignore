@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Editor / agent configs
+.claude/
+.vscode/
+
+# Agent workspace data
+.workbuddy/

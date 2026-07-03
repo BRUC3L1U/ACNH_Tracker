@@ -1,8 +1,51 @@
 const TAB_NAMES = { bug: '虫', fish: '鱼', sea: '海洋生物' };
 
+const CONFIG = {
+  STORAGE_KEYS: { collected: 'acnh_collected', hemisphere: 'acnh_hemisphere' },
+  TICK_MS: 60000,
+  MONTHS: 12,
+  HOURS: 24,
+  TABS: Object.keys(TAB_NAMES),
+  SORT_KEYS: [{key:'name',label:'名称'},{key:'price',label:'价格'},{key:'collected',label:'收集'}],
+  STATUS_OPTS: [['all','全部'],['uncollected','未收集'],['collected','已收集']],
+  SEARCH_DEBOUNCE_MS: 150
+};
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function debounce(fn, ms){
+  let t;
+  return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), ms); };
+}
+
+function toggleArrayFilter(name, value){
+  const arr = state.filters[state.activeTab][name];
+  const idx = arr.indexOf(value);
+  idx >= 0 ? arr.splice(idx,1) : arr.push(value);
+}
+
+function hemisphereButtons(activeClass){
+  return '<button class="'+activeClass+(state.hemisphere==='north'?' active':'')+'" data-hemi="north">北半球</button>'
+       + '<button class="'+activeClass+(state.hemisphere==='south'?' active':'')+'" data-hemi="south">南半球</button>';
+}
+
+function bindHemisphereButtons(root){
+  root.querySelectorAll('[data-hemi]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ state.hemisphere=btn.dataset.hemi; saveHemisphere(); renderAll(); });
+  });
+}
+
+const ALL_DATA = [
+  ...FISH_DATA.map(x => ({...x, type:'fish'})),
+  ...BUG_DATA.map(x => ({...x, type:'bug'})),
+  ...SEA_DATA.map(x => ({...x, type:'sea'}))
+];
+
 const state = {
   activeTab: 'bug',
-  hemisphere: localStorage.getItem('acnh_hemisphere') === 'south' ? 'south' : 'north',
+  hemisphere: localStorage.getItem(CONFIG.STORAGE_KEYS.hemisphere) === 'south' ? 'south' : 'north',
   collected: loadCollected(),
   filters: {
     fish: { location:[], shadowSize:[], month:null, hour:null, status:'all', search:'' },
@@ -16,7 +59,7 @@ const state = {
 
 function loadCollected() {
   try {
-    const s = localStorage.getItem('acnh_collected');
+    const s = localStorage.getItem(CONFIG.STORAGE_KEYS.collected);
     if (s) return new Set(JSON.parse(s));
   } catch {}
   // Migrate from the legacy cookie (one-time), then clear it.
@@ -25,7 +68,7 @@ function loadCollected() {
     try {
       const arr = JSON.parse(decodeURIComponent(m.split('=').slice(1).join('=')));
       const set = new Set(arr);
-      try { localStorage.setItem('acnh_collected', JSON.stringify(arr)); } catch {}
+      try { localStorage.setItem(CONFIG.STORAGE_KEYS.collected, JSON.stringify(arr)); } catch {}
       document.cookie = 'acnh_collected=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax';
       return set;
     } catch {}
@@ -34,7 +77,7 @@ function loadCollected() {
 }
 
 function saveCollected() {
-  try { localStorage.setItem('acnh_collected', JSON.stringify([...state.collected])); } catch {}
+  try { localStorage.setItem(CONFIG.STORAGE_KEYS.collected, JSON.stringify([...state.collected])); } catch {}
 }
 
 function exportCollected() {
@@ -59,7 +102,14 @@ function importCollected(e) {
       const parsed = JSON.parse(reader.result);
       const arr = Array.isArray(parsed) ? parsed : parsed.collected;
       if (!Array.isArray(arr)) throw new Error('文件格式不正确');
-      state.collected = new Set(arr);
+      const incoming = new Set(arr);
+      if (state.collected.size > 0) {
+        if (!confirm('导入将覆盖当前的 ' + state.collected.size + ' 条记录，是否继续？')) {
+          e.target.value = '';
+          return;
+        }
+      }
+      state.collected = incoming;
       saveCollected();
       renderAll();
       alert('导入成功，共 ' + state.collected.size + ' 条记录');
@@ -72,7 +122,7 @@ function importCollected(e) {
 }
 
 function saveHemisphere() {
-  try { localStorage.setItem('acnh_hemisphere', state.hemisphere); } catch {}
+  try { localStorage.setItem(CONFIG.STORAGE_KEYS.hemisphere, state.hemisphere); } catch {}
 }
 
 function getLocalTime() { return new Date(); }
@@ -88,16 +138,16 @@ function isAvailableNow(item) {
 function isLeavingNextMonth(item) {
   const now = getLocalTime();
   const month = now.getMonth() + 1;
-  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextMonth = month === CONFIG.MONTHS ? 1 : month + 1;
   const months = state.hemisphere === 'north' ? item.northMonths : item.southMonths;
   return months.includes(month) && !months.includes(nextMonth);
 }
 
 function getTimeRangeLabel(hours) {
-  if (hours.length === 24) return '全天';
-  var r = [];
-  var s = hours[0], e = hours[0];
-  for (var i = 1; i < hours.length; i++) {
+  if (hours.length === CONFIG.HOURS) return '全天';
+  const r = [];
+  let s = hours[0], e = hours[0];
+  for (let i = 1; i < hours.length; i++) {
     if (hours[i] === e + 1) { e = hours[i]; }
     else { r.push(s === e ? s + '时' : s + '-' + e + '时'); s = hours[i]; e = hours[i]; }
   }
@@ -111,7 +161,10 @@ function applyFilters(data, tab) {
 
   if (f.search) {
     const s = f.search.toLowerCase();
-    items = items.filter(x => x.name.toLowerCase().includes(s));
+    items = items.filter(x => {
+      const hay = x.name + ' ' + (x.location||'') + ' ' + (x.weather||'') + ' ' + (x.shadowSize||'');
+      return hay.toLowerCase().includes(s);
+    });
   }
 
   if (tab === 'fish' || tab === 'bug') {
@@ -132,7 +185,7 @@ function applyFilters(data, tab) {
   }
   if (f.hour !== null) {
     if (f.hour === 'all') {
-      items = items.filter(x => x.hours.length === 24);
+      items = items.filter(x => x.hours.length === CONFIG.HOURS);
     } else {
       items = items.filter(x => x.hours.includes(f.hour));
     }
@@ -159,7 +212,7 @@ function applyFilters(data, tab) {
 }
 
 function renderNavTabs() {
-  document.getElementById('navTabs').innerHTML = ['bug','fish','sea'].map(t =>
+  document.getElementById('navTabs').innerHTML = CONFIG.TABS.map(t =>
     '<button class="nav-tab' + (state.activeTab===t?' active':'') + '" data-tab="'+t+'">' + TAB_NAMES[t] + '</button>'
   ).join('');
 }
@@ -169,9 +222,14 @@ function renderProgress() {
   const total = data.length;
   const collected = data.filter(x => state.collected.has(x.id)).length;
   const pct = total > 0 ? (collected/total*100).toFixed(1) : 0;
+  const allTotal = ALL_DATA.length;
+  const allCollected = ALL_DATA.filter(x => state.collected.has(x.id)).length;
+  const allPct = allTotal > 0 ? (allCollected/allTotal*100).toFixed(1) : 0;
   document.getElementById('progressSection').innerHTML =
     '<div class="progress-text"><span class="progress-label">'+TAB_NAMES[state.activeTab]+' 收集进度</span><span class="progress-pct">已收集 '+collected+' / '+total+' （'+pct+'%）</span></div>' +
-    '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>';
+    '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
+    '<div class="progress-text" style="margin-top:14px"><span class="progress-label" style="font-size:13px">总进度</span><span style="font-size:15px;font-weight:700;color:var(--color-primary-dark)">已收集 '+allCollected+' / '+allTotal+' （'+allPct+'%）</span></div>' +
+    '<div class="progress-bar"><div class="progress-fill" style="width:'+allPct+'%"></div></div>';
 }
 
 function renderTodayPanel() {
@@ -179,22 +237,26 @@ function renderTodayPanel() {
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  const allData = [
-    ...FISH_DATA.map(x => ({...x,type:'fish'})),
-    ...BUG_DATA.map(x => ({...x,type:'bug'})),
-    ...SEA_DATA.map(x => ({...x,type:'sea'}))
-  ];
-
-  const nowAvailable = allData.filter(x => isAvailableNow(x));
+  const nowAvailable = ALL_DATA.filter(x => isAvailableNow(x));
   const byType = {
     fish: nowAvailable.filter(x => x.type==='fish'),
     bug: nowAvailable.filter(x => x.type==='bug'),
     sea: nowAvailable.filter(x => x.type==='sea')
   };
 
+  function todayRow(item, tags){
+    const warn = isLeavingNextMonth(item) ? ' <span class="warn">⚠️ 本月即将消失</span>' : '';
+    const timeLabel = getTimeRangeLabel(item.hours);
+    return '<div class="today-item"><span style="font-weight:600;min-width:80px">'
+      + escapeHtml(item.name) + '</span>' + tags
+      + '<span style="font-size:12px;color:var(--color-text-muted)">' + timeLabel + '</span>'
+      + '<span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'
+      + item.price + ' 铃钱</span>' + warn + '</div>';
+  }
+
   let html = '<div class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader"><h3><span class="arrow">▶</span> 今日可捕捉 （'+monStr+' '+hour+'时）</h3><span style="font-size:13px;color:var(--color-text-muted)">'+nowAvailable.length+' 种生物可捕捉</span></div>';
   html += '<div class="today-body'+(state.todayOpen?' open':'')+'">';
-  html += '<div class="today-info"><span>当前半球：</span><button class="hemi-btn'+(state.hemisphere==='north'?' active':'')+'" id="hemiNorth">北半球</button><button class="hemi-btn'+(state.hemisphere==='south'?' active':'')+'" id="hemiSouth">南半球</button><span style="color:var(--color-text-muted);font-size:12px">（可切换）</span></div>';
+  html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')+'<span style="color:var(--color-text-muted);font-size:12px">（可切换）</span></div>';
 
   for (const t of ['fish','bug','sea']) {
     const items = byType[t];
@@ -203,15 +265,15 @@ function renderTodayPanel() {
       html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
     } else {
       items.forEach(item => {
-        const warn = isLeavingNextMonth(item) ? ' <span class="warn">⚠️ 本月即将消失</span>' : '';
-        const timeLabel = getTimeRangeLabel(item.hours);
+        let tags;
         if (t === 'fish') {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
+          tags = '<span class="tag tag-location">'+escapeHtml(item.location)+'</span><span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
         } else if (t === 'bug') {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-location">'+item.location+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
+          tags = '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
         } else {
-          html += '<div class="today-item"><span style="font-weight:600;min-width:80px">'+item.name+'</span><span class="tag tag-shadow">'+item.shadowSize+'</span><span style="font-size:12px;color:var(--color-text-muted)">'+timeLabel+'</span><span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'+item.price+' 铃钱</span>'+warn+'</div>';
+          tags = '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
         }
+        html += todayRow(item, tags);
       });
     }
   }
@@ -223,8 +285,7 @@ function renderTodayPanel() {
     state.todayOpen = !state.todayOpen;
     renderTodayPanel();
   });
-  document.getElementById('hemiNorth').addEventListener('click', () => { state.hemisphere = 'north'; saveHemisphere(); renderAll(); });
-  document.getElementById('hemiSouth').addEventListener('click', () => { state.hemisphere = 'south'; saveHemisphere(); renderAll(); });
+  bindHemisphereButtons(document.getElementById('todayPanel'));
 }
 
 function renderFilters() {
@@ -247,12 +308,11 @@ function renderFilters() {
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'">';
 
   html += '<div class="filter-row"><span class="filter-label">半球</span><div class="filter-options">';
-  html += '<button class="filter-btn'+(state.hemisphere==='north'?' active':'')+'" data-hemi="north">北半球</button>';
-  html += '<button class="filter-btn'+(state.hemisphere==='south'?' active':'')+'" data-hemi="south">南半球</button>';
+  html += hemisphereButtons('filter-btn');
   html += '</div></div>';
 
   html += '<div class="filter-row"><span class="filter-label">收集状态</span><div class="filter-options">';
-  for (const [val,label] of [['all','全部'],['uncollected','未收集'],['collected','已收集']]) {
+  for (const [val,label] of CONFIG.STATUS_OPTS) {
     html += '<button class="filter-btn'+(f.status===val?' active':'')+'" data-filter="status" data-value="'+val+'">'+label+'</button>';
   }
   html += '</div></div>';
@@ -260,7 +320,7 @@ function renderFilters() {
   if (tab === 'fish' || tab === 'bug') {
     html += '<div class="filter-row"><span class="filter-label">出现场所</span><div class="filter-options">';
     locations.forEach(loc => {
-      html += '<button class="filter-btn'+(f.location.includes(loc)?' active':'')+'" data-filter="location" data-value="'+loc.replace(/"/g,'&quot;')+'">'+loc+'</button>';
+      html += '<button class="filter-btn'+(f.location.includes(loc)?' active':'')+'" data-filter="location" data-value="'+escapeHtml(loc)+'">'+escapeHtml(loc)+'</button>';
     });
     html += '</div></div>';
   }
@@ -268,7 +328,7 @@ function renderFilters() {
   if (tab !== 'bug') {
     html += '<div class="filter-row"><span class="filter-label">'+(tab==='sea'?'影子大小':'鱼影尺寸')+'</span><div class="filter-options">';
     shadows.forEach(s => {
-      html += '<button class="filter-btn'+(f.shadowSize.includes(s)?' active':'')+'" data-filter="shadowSize" data-value="'+s+'">'+s+'</button>';
+      html += '<button class="filter-btn'+(f.shadowSize.includes(s)?' active':'')+'" data-filter="shadowSize" data-value="'+escapeHtml(s)+'">'+escapeHtml(s)+'</button>';
     });
     html += '</div></div>';
   }
@@ -276,14 +336,14 @@ function renderFilters() {
   if (tab === 'bug') {
     html += '<div class="filter-row"><span class="filter-label">天气条件</span><div class="filter-options">';
     weathers.forEach(w => {
-      html += '<button class="filter-btn'+(f.weather.includes(w)?' active':'')+'" data-filter="weather" data-value="'+w+'">'+w+'</button>';
+      html += '<button class="filter-btn'+(f.weather.includes(w)?' active':'')+'" data-filter="weather" data-value="'+escapeHtml(w)+'">'+escapeHtml(w)+'</button>';
     });
     html += '</div></div>';
   }
 
   html += '<div class="filter-row"><span class="filter-label">出现月份</span><div class="filter-options" id="monthGrid">';
   const curMon = getLocalTime().getMonth() + 1;
-  for (let m = 1; m <= 12; m++) {
+  for (let m = 1; m <= CONFIG.MONTHS; m++) {
     html += '<button class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' month-current':'')+'" data-filter="month" data-value="'+m+'">'+m+'</button>';
   }
   html += '</div></div>';
@@ -291,13 +351,13 @@ function renderFilters() {
   html += '<div class="filter-row"><span class="filter-label">出现时间</span><div class="filter-options" id="hourGrid">';
   const curHr = getLocalTime().getHours();
   html += '<button class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all">全天</button>';
-  for (let h = 0; h < 24; h++) {
+  for (let h = 0; h < CONFIG.HOURS; h++) {
     html += '<button class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' month-current':'')+'" data-filter="hour" data-value="'+h+'">'+h+'</button>';
   }
   html += '</div></div>';
 
   html += '<div class="filter-row"><span class="filter-label">搜索</span>';
-  html += '<input class="filter-search" id="filterSearch" type="text" placeholder="按名称模糊搜索..." value="'+f.search.replace(/"/g,'&quot;')+'">';
+  html += '<input class="filter-search" id="filterSearch" type="text" placeholder="按名称/场所/天气模糊搜索..." value="'+escapeHtml(f.search)+'">';
   html += '<button class="filter-reset" id="filterReset">重置全部</button>';
   html += '</div></div>';
 
@@ -308,13 +368,7 @@ function renderFilters() {
     renderFilters();
   });
 
-  document.querySelectorAll('#filterBar .filter-btn[data-hemi]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.hemisphere = btn.dataset.hemi;
-      saveHemisphere();
-      renderAll();
-    });
-  });
+  bindHemisphereButtons(document.getElementById('filterBar'));
 
   document.querySelectorAll('#filterBar .filter-btn[data-filter]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -322,18 +376,8 @@ function renderFilters() {
       const value = btn.dataset.value;
       if (filter === 'status') {
         state.filters[tab].status = value;
-      } else if (filter === 'location') {
-        const arr = state.filters[tab].location;
-        const idx = arr.indexOf(value);
-        idx >= 0 ? arr.splice(idx,1) : arr.push(value);
-      } else if (filter === 'shadowSize') {
-        const arr = state.filters[tab].shadowSize;
-        const idx = arr.indexOf(value);
-        idx >= 0 ? arr.splice(idx,1) : arr.push(value);
-      } else if (filter === 'weather') {
-        const arr = state.filters[tab].weather;
-        const idx = arr.indexOf(value);
-        idx >= 0 ? arr.splice(idx,1) : arr.push(value);
+      } else if (filter === 'location' || filter === 'shadowSize' || filter === 'weather') {
+        toggleArrayFilter(filter, value);
       } else if (filter === 'month') {
         state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
       } else if (filter === 'hour') {
@@ -348,10 +392,8 @@ function renderFilters() {
     });
   });
 
-  document.getElementById('filterSearch').addEventListener('input', function() {
-    state.filters[tab].search = this.value;
-    renderList();
-  });
+  const onSearch = debounce(function(){ state.filters[tab].search = this.value; renderList(); }, CONFIG.SEARCH_DEBOUNCE_MS);
+  document.getElementById('filterSearch').addEventListener('input', onSearch);
 
   document.getElementById('filterReset').addEventListener('click', () => {
     state.filters[tab] = { location:[], shadowSize:[], weather:[], month:null, hour:null, status:'all', search:'' };
@@ -366,13 +408,14 @@ function renderList() {
   const filtered = applyFilters(data, tab);
 
   let html = '<div class="list-header">';
-  const sortKeys = [{key:'name',label:'名称'},{key:'price',label:'价格'},{key:'collected',label:'收集'}];
-  sortKeys.forEach(sk => {
+  CONFIG.SORT_KEYS.forEach(sk => {
     const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
-    html += '<span class="sortable" data-sort="'+sk.key+'">'+sk.label+'</span><span style="font-size:10px">'+arrow+'</span> ';
+    html += '<span class="sortable" data-sort="'+sk.key+'">'+sk.label+arrow+'</span> ';
   });
   html += '<span style="flex:1"></span>';
   html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+filtered.length+' 条</span>';
+  html += '<button class="data-btn" id="markAllVisible" style="margin-left:8px;padding:4px 12px;font-size:12px">全标</button>';
+  html += '<button class="data-btn" id="unmarkAllVisible" style="padding:4px 12px;font-size:12px">全取消</button>';
   html += '</div>';
 
   if (filtered.length === 0) {
@@ -384,10 +427,10 @@ function renderList() {
     html += '<div class="creature-item'+(collected?' collected':'')+'" data-id="'+item.id+'">';
     html += '<div class="check-box"></div>';
     html += '<div class="creature-main">';
-    html += '<span class="creature-name">'+item.name+'</span>';
-    html += '<span class="tag tag-location">'+item.location+'</span>';
+    html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
+    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
     if (item.shadowSize) {
-      html += '<span class="tag tag-shadow">'+item.shadowSize+'</span>';
+      html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
     }
     html += '<span class="tag-price">'+item.price+' 铃钱</span>';
     html += '</div>';
@@ -396,13 +439,13 @@ function renderList() {
     html += '<div class="meta-row"><span style="min-width:40px;font-size:11px">月:</span>';
     const months = state.hemisphere === 'north' ? item.northMonths : item.southMonths;
     const curMon = getLocalTime().getMonth() + 1;
-    for (let m = 1; m <= 12; m++) {
+    for (let m = 1; m <= CONFIG.MONTHS; m++) {
       html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
     }
     html += '</div>';
     html += '<div class="meta-row"><span style="min-width:40px;font-size:11px">时:</span>';
     const curHr = getLocalTime().getHours();
-    for (let h = 0; h < 24; h++) {
+    for (let h = 0; h < CONFIG.HOURS; h++) {
       html += '<span class="heat-cell heat-cell-hour'+(item.hours.includes(h)?' on':'')+(h===curHr?' current':'')+'">'+h+'</span>';
     }
     html += '</div></div>';
@@ -422,6 +465,19 @@ function renderList() {
       }
       renderList();
     });
+  });
+
+  document.getElementById('markAllVisible').addEventListener('click', () => {
+    filtered.forEach(x => state.collected.add(x.id));
+    saveCollected();
+    renderProgress();
+    renderList();
+  });
+  document.getElementById('unmarkAllVisible').addEventListener('click', () => {
+    filtered.forEach(x => state.collected.delete(x.id));
+    saveCollected();
+    renderProgress();
+    renderList();
   });
 
   document.querySelectorAll('.creature-item').forEach(el => {
@@ -497,7 +553,7 @@ setInterval(() => {
     renderFilters();
     renderList();
   }
-}, 60000);
+}, CONFIG.TICK_MS);
 
 renderDataBar();
 renderAll();
