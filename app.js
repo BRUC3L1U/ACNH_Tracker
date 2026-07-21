@@ -12,7 +12,32 @@ const CONFIG = {
 };
 
 function escapeHtml(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function highlightMatch(text, query){
+  const t = String(text == null ? '' : text);
+  if (!query) return escapeHtml(t);
+  const idx = t.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return escapeHtml(t);
+  return escapeHtml(t.slice(0, idx)) + '<mark>' + escapeHtml(t.slice(idx, idx + query.length)) + '</mark>' + escapeHtml(t.slice(idx + query.length));
+}
+
+let toastTimer = null;
+function showToast(msg){
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  // Force reflow so re-triggering while visible restarts the transition.
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
 function debounce(fn, ms){
@@ -33,14 +58,26 @@ function hemisphereButtons(activeClass){
 
 function bindHemisphereButtons(root){
   root.querySelectorAll('[data-hemi]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ state.hemisphere=btn.dataset.hemi; saveHemisphere(); renderAll(); });
+    btn.addEventListener('click', ()=>{
+      if (state.hemisphere === btn.dataset.hemi) return;
+      state.hemisphere = btn.dataset.hemi;
+      saveHemisphere();
+      renderAll();
+      const remaining = applyFilters(DATA_MAP[state.activeTab], state.activeTab).length;
+      const label = state.hemisphere === 'north' ? '北半球' : '南半球';
+      showToast(remaining === 0
+        ? '已切换到' + label + '，当前筛选条件下没有匹配的生物，可尝试重置筛选'
+        : '已切换到' + label + '，当前筛选命中 ' + remaining + ' 条');
+    });
   });
 }
 
+// Lightweight tagged views: keep a reference to the original object plus its
+// type, instead of spreading every creature into a fresh 200-object copy.
 const ALL_DATA = [
-  ...FISH_DATA.map(x => ({...x, type:'fish'})),
-  ...BUG_DATA.map(x => ({...x, type:'bug'})),
-  ...SEA_DATA.map(x => ({...x, type:'sea'}))
+  ...DATA_MAP.fish.map(x => Object.assign(x, {type:'fish'})),
+  ...DATA_MAP.bug.map(x => Object.assign(x, {type:'bug'})),
+  ...DATA_MAP.sea.map(x => Object.assign(x, {type:'sea'}))
 ];
 
 const state = {
@@ -48,13 +85,14 @@ const state = {
   hemisphere: localStorage.getItem(CONFIG.STORAGE_KEYS.hemisphere) === 'south' ? 'south' : 'north',
   collected: loadCollected(),
   filters: {
-    fish: { location:[], shadowSize:[], month:null, hour:null, status:'all', search:'' },
-    bug:  { location:[], weather:[], month:null, hour:null, status:'all', search:'' },
-    sea:  { shadowSize:[], month:null, hour:null, status:'all', search:'' }
+    fish: { location:[], shadowSize:[], month:null, hour:null, hourManual:false, status:'all', search:'' },
+    bug:  { location:[], weather:[], month:null, hour:null, hourManual:false, status:'all', search:'' },
+    sea:  { shadowSize:[], month:null, hour:null, hourManual:false, status:'all', search:'' }
   },
   sort: { key: null, dir: 'asc' },
   todayOpen: false,
-  filterOpen: false
+  filterOpen: false,
+  todayUncollectedOnly: false
 };
 
 function loadCollected() {
@@ -237,7 +275,10 @@ function renderTodayPanel() {
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  const nowAvailable = ALL_DATA.filter(x => isAvailableNow(x));
+  let nowAvailable = ALL_DATA.filter(x => isAvailableNow(x));
+  if (state.todayUncollectedOnly) {
+    nowAvailable = nowAvailable.filter(x => !state.collected.has(x.id));
+  }
   const byType = {
     fish: nowAvailable.filter(x => x.type==='fish'),
     bug: nowAvailable.filter(x => x.type==='bug'),
@@ -256,7 +297,8 @@ function renderTodayPanel() {
 
   let html = '<div class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader"><h3><span class="arrow">▶</span> 今日可捕捉 （'+monStr+' '+hour+'时）</h3><span style="font-size:13px;color:var(--color-text-muted)">'+nowAvailable.length+' 种生物可捕捉</span></div>';
   html += '<div class="today-body'+(state.todayOpen?' open':'')+'">';
-  html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')+'<span style="color:var(--color-text-muted);font-size:12px">（可切换）</span></div>';
+  html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')
+    + '<label class="today-toggle"><input type="checkbox" id="todayUncollected"'+(state.todayUncollectedOnly?' checked':'')+'>只看未收集</label></div>';
 
   for (const t of ['fish','bug','sea']) {
     const items = byType[t];
@@ -283,6 +325,10 @@ function renderTodayPanel() {
 
   document.getElementById('todayHeader').addEventListener('click', () => {
     state.todayOpen = !state.todayOpen;
+    renderTodayPanel();
+  });
+  document.getElementById('todayUncollected').addEventListener('change', e => {
+    state.todayUncollectedOnly = e.target.checked;
     renderTodayPanel();
   });
   bindHemisphereButtons(document.getElementById('todayPanel'));
@@ -370,37 +416,45 @@ function renderFilters() {
 
   bindHemisphereButtons(document.getElementById('filterBar'));
 
-  document.querySelectorAll('#filterBar .filter-btn[data-filter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const filter = btn.dataset.filter;
-      const value = btn.dataset.value;
-      if (filter === 'status') {
-        state.filters[tab].status = value;
-      } else if (filter === 'location' || filter === 'shadowSize' || filter === 'weather') {
-        toggleArrayFilter(filter, value);
-      } else if (filter === 'month') {
-        state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
-      } else if (filter === 'hour') {
-        if (value === 'all') {
-          state.filters[tab].hour = state.filters[tab].hour === 'all' ? null : 'all';
-        } else {
-          state.filters[tab].hour = state.filters[tab].hour === parseInt(value) ? null : parseInt(value);
-        }
-      }
-      renderFilters();
-      renderList();
-    });
-  });
-
-  const onSearch = debounce(function(){ state.filters[tab].search = this.value; renderList(); }, CONFIG.SEARCH_DEBOUNCE_MS);
+  const onSearch = debounce(function(){ state.filters[state.activeTab].search = this.value; renderList(); }, CONFIG.SEARCH_DEBOUNCE_MS);
   document.getElementById('filterSearch').addEventListener('input', onSearch);
 
   document.getElementById('filterReset').addEventListener('click', () => {
-    state.filters[tab] = { location:[], shadowSize:[], weather:[], month:null, hour:null, status:'all', search:'' };
+    // Resetting hands hour control back to the clock.
+    state.filters[state.activeTab] = { location:[], shadowSize:[], weather:[], month:null, hour:null, hourManual:false, status:'all', search:'' };
     renderFilters();
     renderList();
   });
 }
+
+// One delegated listener for every filter button, attached once at startup.
+// #filterBar itself is persistent (only its innerHTML is re-rendered), so the
+// listener survives re-renders without stacking duplicates.
+document.getElementById('filterBar').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn[data-filter]');
+  if (!btn) return;
+  const tab = state.activeTab;
+  const filter = btn.dataset.filter;
+  const value = btn.dataset.value;
+  if (filter === 'status') {
+    state.filters[tab].status = value;
+  } else if (filter === 'location' || filter === 'shadowSize' || filter === 'weather') {
+    toggleArrayFilter(filter, value);
+  } else if (filter === 'month') {
+    state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
+  } else if (filter === 'hour') {
+    // Any manual hour choice (including "全天" and re-tapping to clear)
+    // marks the filter as user-owned so the hourly tick won't clobber it.
+    state.filters[tab].hourManual = true;
+    if (value === 'all') {
+      state.filters[tab].hour = state.filters[tab].hour === 'all' ? null : 'all';
+    } else {
+      state.filters[tab].hour = state.filters[tab].hour === parseInt(value) ? null : parseInt(value);
+    }
+  }
+  renderFilters();
+  renderList();
+});
 
 function renderList() {
   const tab = state.activeTab;
@@ -424,13 +478,14 @@ function renderList() {
 
   filtered.forEach(item => {
     const collected = state.collected.has(item.id);
+    const q = state.filters[tab].search.trim();
     html += '<div class="creature-item'+(collected?' collected':'')+'" data-id="'+item.id+'">';
     html += '<div class="check-box"></div>';
     html += '<div class="creature-main">';
-    html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
-    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+    html += '<span class="creature-name">'+highlightMatch(item.name, q)+'</span>';
+    html += '<span class="tag tag-location">'+highlightMatch(item.location, q)+'</span>';
     if (item.shadowSize) {
-      html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+      html += '<span class="tag tag-shadow">'+highlightMatch(item.shadowSize, q)+'</span>';
     }
     html += '<span class="tag-price">'+item.price+' 铃钱</span>';
     html += '</div>';
@@ -454,19 +509,6 @@ function renderList() {
 
   document.getElementById('listSection').innerHTML = html;
 
-  document.querySelectorAll('.sortable').forEach(el => {
-    el.addEventListener('click', () => {
-      const key = el.dataset.sort;
-      if (state.sort.key === key) {
-        state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
-      } else {
-        state.sort.key = key;
-        state.sort.dir = 'asc';
-      }
-      renderList();
-    });
-  });
-
   document.getElementById('markAllVisible').addEventListener('click', () => {
     filtered.forEach(x => state.collected.add(x.id));
     saveCollected();
@@ -479,29 +521,43 @@ function renderList() {
     renderProgress();
     renderList();
   });
-
-  document.querySelectorAll('.creature-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const id = el.dataset.id;
-      if (state.collected.has(id)) {
-        state.collected.delete(id);
-        el.classList.remove('collected');
-      } else {
-        state.collected.add(id);
-        el.classList.add('collected');
-      }
-      saveCollected();
-      renderProgress();
-      // When a status filter or collected-sort is active, the item must
-      // (dis)appear or reorder — fall back to a list rebuild. Otherwise the
-      // in-place class toggle above is enough and avoids losing scroll/focus.
-      const f = state.filters[state.activeTab];
-      if (f.status !== 'all' || state.sort.key === 'collected') {
-        renderList();
-      }
-    });
-  });
 }
+
+// Delegated listener for sort headers and creature rows, attached once.
+document.getElementById('listSection').addEventListener('click', e => {
+  const sortEl = e.target.closest('.sortable');
+  if (sortEl) {
+    const key = sortEl.dataset.sort;
+    if (state.sort.key === key) {
+      state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      state.sort.key = key;
+      state.sort.dir = 'asc';
+    }
+    renderList();
+    return;
+  }
+
+  const itemEl = e.target.closest('.creature-item');
+  if (!itemEl) return;
+  const id = itemEl.dataset.id;
+  if (state.collected.has(id)) {
+    state.collected.delete(id);
+    itemEl.classList.remove('collected');
+  } else {
+    state.collected.add(id);
+    itemEl.classList.add('collected');
+  }
+  saveCollected();
+  renderProgress();
+  // When a status filter or collected-sort is active, the item must
+  // (dis)appear or reorder — fall back to a list rebuild. Otherwise the
+  // in-place class toggle above is enough and avoids losing scroll/focus.
+  const f = state.filters[state.activeTab];
+  if (f.status !== 'all' || state.sort.key === 'collected') {
+    renderList();
+  }
+});
 
 function renderAll() {
   renderNavTabs();
@@ -542,12 +598,13 @@ setInterval(() => {
     lastTickMinute = minute;
     renderTodayPanel();
   }
-  // When the hour rolls over, auto-select the current hour in the filter
-  // and refresh both the filter bar highlight and the list.
+  // When the hour rolls over, follow the clock with the hour filter — but
+  // only until the user picks an hour themselves (hourManual). Their choice
+  // stays put; hitting 重置全部 hands control back to the clock.
   if (hour !== lastTickHour) {
     lastTickHour = hour;
     const tab = state.activeTab;
-    if (state.filters[tab]) {
+    if (state.filters[tab] && !state.filters[tab].hourManual) {
       state.filters[tab].hour = hour;
     }
     renderFilters();

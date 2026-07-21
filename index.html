@@ -66,7 +66,10 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .filter-btn:hover{border-color:var(--color-primary);background:rgba(139,195,74,.08)}
 .filter-btn.active{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
 .filter-btn.month-grid{width:36px;text-align:center;padding:6px 0}
-.month-current{border-color:var(--color-accent-warm)!important;box-shadow:0 0 0 1px var(--color-accent-warm)}
+/* Only mark the current month/hour when it is not the active selection — the
+   active (green) style must win so the user can tell "selected" apart from
+   "just happens to be now". */
+.filter-btn.month-current:not(.active){border-color:var(--color-accent-warm);box-shadow:0 0 0 1px var(--color-accent-warm)}
 .filter-search{flex:1;min-width:120px;padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--color-border);background:var(--color-bg);color:var(--color-text);font-size:13px;outline:none}
 .filter-search:focus{border-color:var(--color-primary)}
 .filter-reset{padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--color-danger);background:transparent;color:var(--color-danger);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
@@ -83,7 +86,18 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
   .heat-cell{width:20px;height:18px;font-size:9px}
   .heat-cell-hour{width:15px;height:15px;font-size:8px}
   .meta-row{flex-wrap:wrap;row-gap:4px}
+  .list-header{flex-wrap:wrap;row-gap:6px}
+  .list-header .data-btn{margin-left:0!important}
+  .creature-item{padding:12px 12px}
 }
+
+mark{background:rgba(139,195,74,.28);color:inherit;border-radius:3px;padding:0 1px}
+
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(16px);background:var(--color-text);color:var(--color-bg);padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:200;max-width:calc(100vw - 40px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.today-toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--color-text-muted);cursor:pointer;user-select:none}
+.today-toggle input{accent-color:var(--color-primary);cursor:pointer}
 
 .list-section{background:var(--color-surface);border-radius:var(--radius-card);overflow:hidden;box-shadow:0 1px 4px var(--color-shadow);border:1px solid var(--color-border)}
 .list-header{display:flex;align-items:center;padding:12px 20px;border-bottom:2px solid var(--color-border);font-size:13px;font-weight:600;color:var(--color-text-muted);gap:8px;background:rgba(139,195,74,.04)}
