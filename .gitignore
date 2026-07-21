@@ -7,3 +7,10 @@
 
 # Agent workspace data
 .workbuddy/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
