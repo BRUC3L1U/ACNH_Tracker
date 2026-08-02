@@ -92,7 +92,8 @@ const state = {
   sort: { key: null, dir: 'asc' },
   todayOpen: false,
   filterOpen: false,
-  todayUncollectedOnly: false
+  todayUncollectedOnly: false,
+  todayGroups: { fish: true, bug: true, sea: true }
 };
 
 function loadCollected() {
@@ -302,7 +303,9 @@ function renderTodayPanel() {
 
   for (const t of ['fish','bug','sea']) {
     const items = byType[t];
-    html += '<h4>'+TAB_NAMES[t]+' （'+items.length+'）</h4>';
+    const open = state.todayGroups[t];
+    html += '<h4 class="today-group-header'+(open?' open':'')+'" data-group="'+t+'"><span class="arrow">▶</span> '+TAB_NAMES[t]+' （'+items.length+'）</h4>';
+    html += '<div class="today-group-body'+(open?' open':'')+'" id="todayGroup-'+t+'">';
     if (items.length === 0) {
       html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
     } else {
@@ -318,6 +321,7 @@ function renderTodayPanel() {
         html += todayRow(item, tags);
       });
     }
+    html += '</div>';
   }
   html += '</div>';
 
@@ -330,6 +334,16 @@ function renderTodayPanel() {
   document.getElementById('todayUncollected').addEventListener('change', e => {
     state.todayUncollectedOnly = e.target.checked;
     renderTodayPanel();
+  });
+  // Group headers toggle in place (no full re-render); state.todayGroups
+  // keeps the choice in sync for the next scheduled panel refresh.
+  document.querySelectorAll('#todayPanel .today-group-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const g = h.dataset.group;
+      state.todayGroups[g] = !state.todayGroups[g];
+      h.classList.toggle('open', state.todayGroups[g]);
+      document.getElementById('todayGroup-' + g).classList.toggle('open', state.todayGroups[g]);
+    });
   });
   bindHemisphereButtons(document.getElementById('todayPanel'));
 }

@@ -53,7 +53,12 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .today-info{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px;font-size:14px}
 .hemi-btn{padding:5px 14px;border-radius:var(--radius-sm);border:1px solid var(--color-primary);background:transparent;color:var(--color-primary-dark);cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
 .hemi-btn.active{background:var(--color-primary);color:#fff}
-.today-list h4{font-size:14px;margin:8px 0 6px;color:var(--color-primary-dark)}
+.today-group-header{font-size:14px;margin:12px 0 4px;color:var(--color-primary-dark);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+.today-group-header:hover{color:var(--color-primary)}
+.today-group-header .arrow{transition:transform .2s;font-size:11px;display:inline-block}
+.today-group-header.open .arrow{transform:rotate(90deg)}
+.today-group-body{display:none;padding-left:4px}
+.today-group-body.open{display:block}
 .today-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;flex-wrap:wrap}
 .today-item .warn{color:var(--color-danger);font-size:12px;font-weight:500}
 
