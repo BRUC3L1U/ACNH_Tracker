@@ -79,6 +79,18 @@ function makeFilters(tab){
 // UI state (active tab, filters, sort, panel collapses) survives reloads.
 // hourManual is deliberately NOT persisted: a fresh page should resume
 // following the clock, and only a live hour click hands control to the user.
+// localStorage is untrusted input — a value of the wrong type here silently
+// breaks applyFilters (a string `location` makes every row fail the filter and
+// the list goes empty with no explanation), so each key is type-checked and a
+// bad value falls back to the default rather than being adopted.
+function isValidFilterValue(key, v, isArray) {
+  if (isArray) return Array.isArray(v) && v.every(x => typeof x === 'string');
+  if (key === 'status') return CONFIG.STATUS_OPTS.some(([val]) => val === v);
+  if (key === 'month') return v === null || (Number.isInteger(v) && v >= 1 && v <= CONFIG.MONTHS);
+  if (key === 'hour') return v === null || v === 'all' || (Number.isInteger(v) && v >= 0 && v < CONFIG.HOURS);
+  return false;
+}
+
 function loadUIState() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.ui)); } catch {}
@@ -86,10 +98,11 @@ function loadUIState() {
   const filters = { fish: makeFilters('fish'), bug: makeFilters('bug'), sea: makeFilters('sea') };
   for (const tab of CONFIG.TABS) {
     const s = saved.filters && saved.filters[tab];
-    if (!s) continue;
+    if (!s || typeof s !== 'object') continue;
     const target = filters[tab];
     for (const key of Object.keys(target)) {
-      if (key !== 'hourManual' && key in s) target[key] = s[key];
+      if (key === 'hourManual' || !(key in s)) continue;
+      if (isValidFilterValue(key, s[key], Array.isArray(target[key]))) target[key] = s[key];
     }
   }
   return {
@@ -215,16 +228,28 @@ function isLeavingNextMonth(item) {
   return months.includes(month) && !months.includes(nextMonth);
 }
 
+// Hours arrive sorted 0..23, so a window spanning midnight shows up as two
+// separate runs (e.g. [0..4, 21..23]). Splitting them into "0-4时 / 21-23时"
+// misreads as two windows, so the head and tail runs are merged back into the
+// single wrapping range they represent: "21-4时".
 function getTimeRangeLabel(hours) {
   if (hours.length === CONFIG.HOURS) return '全天';
-  const r = [];
+  const ranges = [];
   let s = hours[0], e = hours[0];
   for (let i = 1; i < hours.length; i++) {
     if (hours[i] === e + 1) { e = hours[i]; }
-    else { r.push(s === e ? s + '时' : s + '-' + e + '时'); s = hours[i]; e = hours[i]; }
+    else { ranges.push({s, e}); s = hours[i]; e = hours[i]; }
   }
-  r.push(s === e ? s + '时' : s + '-' + e + '时');
-  return r.join(' / ');
+  ranges.push({s, e});
+
+  const last = ranges[ranges.length - 1];
+  if (ranges.length > 1 && ranges[0].s === 0 && last.e === CONFIG.HOURS - 1) {
+    const head = ranges.shift();
+    ranges.pop();
+    ranges.unshift({s: last.s, e: head.e});
+  }
+
+  return ranges.map(r => r.s === r.e ? r.s + '时' : r.s + '-' + r.e + '时').join(' / ');
 }
 
 function applyFilters(data, tab) {
@@ -335,13 +360,11 @@ function renderTodayPanel() {
       html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
     } else {
       items.forEach(item => {
-        let tags;
-        if (t === 'fish') {
-          tags = '<span class="tag tag-location">'+escapeHtml(item.location)+'</span><span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
-        } else if (t === 'bug') {
-          tags = '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
-        } else {
-          tags = '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+        let tags = '';
+        if (t !== 'sea') tags += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+        if (item.shadowSize) tags += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+        if (item.weather && item.weather !== '无限制') {
+          tags += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
         }
         html += todayRow(item, tags);
       });
@@ -527,9 +550,17 @@ function renderList() {
     html += '<div class="check-box"></div>';
     html += '<div class="creature-main">';
     html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
-    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+    // Sea creatures are all 海洋底部 — a tag that never varies is pure noise.
+    if (tab !== 'sea') {
+      html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+    }
     if (item.shadowSize) {
       html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+    }
+    // Weather is filterable, so it has to be visible on the row — otherwise a
+    // user who filters by 雨天 can't tell why a given row matched.
+    if (item.weather && item.weather !== '无限制') {
+      html += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
     }
     html += '<span class="tag-price">'+item.price+' 铃钱</span>';
     html += '</div>';
