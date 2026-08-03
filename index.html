@@ -60,7 +60,6 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .today-group-body{display:none;padding-left:4px}
 .today-group-body.open{display:block}
 .today-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;flex-wrap:wrap}
-.today-item .warn{color:var(--color-danger);font-size:12px;font-weight:500}
 
 .filter-bar{background:var(--color-surface);border-radius:var(--radius-card);padding:18px 24px;margin-bottom:16px;box-shadow:0 1px 4px var(--color-shadow);border:1px solid var(--color-border)}
 .filter-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
@@ -73,8 +72,8 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .filter-btn.month-grid{width:36px;text-align:center;padding:6px 0}
 /* Only mark the current month/hour when it is not the active selection — the
    active (green) style must win so the user can tell "selected" apart from
-   "just happens to be now". */
-.filter-btn.month-current:not(.active){border-color:var(--color-accent-warm);box-shadow:0 0 0 1px var(--color-accent-warm)}
+   "just happens to be now". Applies to both the month and hour grids. */
+.filter-btn.is-now:not(.active){border-color:var(--color-accent-warm);box-shadow:0 0 0 1px var(--color-accent-warm)}
 .filter-reset{padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--color-danger);background:transparent;color:var(--color-danger);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
 .filter-reset:hover{background:var(--color-danger);color:#fff}
 .filter-toggle-btn{display:none;width:100%;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--color-primary);background:var(--color-surface);color:var(--color-primary-dark);cursor:pointer;font-size:14px;font-weight:600}
@@ -115,6 +114,7 @@ body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-t
 .tag-shadow{background:rgba(212,155,90,.18);color:#8B6914}
 .tag-weather{background:rgba(123,160,196,.2);color:#3F6280}
 .tag-price{color:var(--color-text-muted);font-weight:700;font-size:13px;white-space:nowrap}
+.note{font-size:12px;color:var(--color-text-muted);font-style:italic}
 .check-box{width:28px;height:28px;border-radius:8px;border:2px solid var(--color-border);display:flex;align-items:center;justify-content:center;transition:all .25s cubic-bezier(.4,0,.2,1);flex-shrink:0;margin-top:2px}
 .check-box::after{content:'\2713';color:#fff;font-size:16px;opacity:0;transition:opacity .2s;font-weight:700}
 .creature-meta{grid-column:1/-1;display:flex;flex-direction:column;gap:4px}

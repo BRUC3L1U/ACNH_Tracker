@@ -58,18 +58,17 @@ function bindHemisphereButtons(root){
   });
 }
 
-// Lightweight tagged views: keep a reference to the original object plus its
-// type, instead of spreading every creature into a fresh 200-object copy.
-const ALL_DATA = [
-  ...DATA_MAP.fish.map(x => Object.assign(x, {type:'fish'})),
-  ...DATA_MAP.bug.map(x => Object.assign(x, {type:'bug'})),
-  ...DATA_MAP.sea.map(x => Object.assign(x, {type:'sea'}))
-];
+// A flat view over all three datasets, tagged with its source tab. The tag
+// lives in a wrapper rather than being assigned onto the creature itself:
+// mutating the objects in DATA_MAP would make data.js's shape depend on
+// app.js having run, which leaks into anything else reading that data.
+const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
 
 // Each tab only carries the array filters its data actually has, so
 // applyFilters' tab guards and the key set stay in agreement.
 function makeFilters(tab){
-  const f = { month:null, hour:null, hourManual:false, status:'all' };
+  const now = getLocalTime();
+  const f = { month:null, hour:now.getHours(), hourManual:false, status:'all' };
   if (tab === 'fish' || tab === 'bug') f.location = [];
   if (tab === 'fish' || tab === 'sea') f.shadowSize = [];
   if (tab === 'bug') f.weather = [];
@@ -77,8 +76,10 @@ function makeFilters(tab){
 }
 
 // UI state (active tab, filters, sort, panel collapses) survives reloads.
-// hourManual is deliberately NOT persisted: a fresh page should resume
-// following the clock, and only a live hour click hands control to the user.
+// hourManual is persisted alongside hour: the hour filter defaults to the
+// current clock hour and follows it on rollover, but once the user picks an
+// hour themselves that choice must survive a reload too — otherwise the next
+// rollover would silently overwrite it.
 // localStorage is untrusted input — a value of the wrong type here silently
 // breaks applyFilters (a string `location` makes every row fail the filter and
 // the list goes empty with no explanation), so each key is type-checked and a
@@ -86,6 +87,7 @@ function makeFilters(tab){
 function isValidFilterValue(key, v, isArray) {
   if (isArray) return Array.isArray(v) && v.every(x => typeof x === 'string');
   if (key === 'status') return CONFIG.STATUS_OPTS.some(([val]) => val === v);
+  if (key === 'hourManual') return typeof v === 'boolean';
   if (key === 'month') return v === null || (Number.isInteger(v) && v >= 1 && v <= CONFIG.MONTHS);
   if (key === 'hour') return v === null || v === 'all' || (Number.isInteger(v) && v >= 0 && v < CONFIG.HOURS);
   return false;
@@ -101,9 +103,13 @@ function loadUIState() {
     if (!s || typeof s !== 'object') continue;
     const target = filters[tab];
     for (const key of Object.keys(target)) {
-      if (key === 'hourManual' || !(key in s)) continue;
+      if (!(key in s)) continue;
       if (isValidFilterValue(key, s[key], Array.isArray(target[key]))) target[key] = s[key];
     }
+    // A restored hour is only meaningful if the user chose it. Otherwise it is
+    // a stale snapshot of whatever hour the last session happened to end on, so
+    // resume following the clock instead.
+    if (!target.hourManual) target.hour = getLocalTime().getHours();
   }
   return {
     activeTab: CONFIG.TABS.includes(saved.activeTab) ? saved.activeTab : 'bug',
@@ -220,14 +226,6 @@ function isAvailableNow(item) {
   return months.includes(month) && item.hours.includes(hour);
 }
 
-function isLeavingNextMonth(item) {
-  const now = getLocalTime();
-  const month = now.getMonth() + 1;
-  const nextMonth = month === CONFIG.MONTHS ? 1 : month + 1;
-  const months = state.hemisphere === 'north' ? item.northMonths : item.southMonths;
-  return months.includes(month) && !months.includes(nextMonth);
-}
-
 // Hours arrive sorted 0..23, so a window spanning midnight shows up as two
 // separate runs (e.g. [0..4, 21..23]). Splitting them into "0-4时 / 21-23时"
 // misreads as two windows, so the head and tail runs are merged back into the
@@ -312,7 +310,7 @@ function renderProgress() {
   const collected = data.filter(x => state.collected.has(x.id)).length;
   const pct = total > 0 ? (collected/total*100).toFixed(1) : 0;
   const allTotal = ALL_DATA.length;
-  const allCollected = ALL_DATA.filter(x => state.collected.has(x.id)).length;
+  const allCollected = ALL_DATA.filter(x => state.collected.has(x.item.id)).length;
   const allPct = allTotal > 0 ? (allCollected/allTotal*100).toFixed(1) : 0;
   document.getElementById('progressSection').innerHTML =
     '<div class="progress-text"><span class="progress-label">'+TAB_NAMES[state.activeTab]+' 收集进度</span><span class="progress-pct">已收集 '+collected+' / '+total+' （'+pct+'%）</span></div>' +
@@ -326,9 +324,9 @@ function renderTodayPanel() {
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  let nowAvailable = ALL_DATA.filter(x => isAvailableNow(x));
+  let nowAvailable = ALL_DATA.filter(x => isAvailableNow(x.item));
   if (state.todayUncollectedOnly) {
-    nowAvailable = nowAvailable.filter(x => !state.collected.has(x.id));
+    nowAvailable = nowAvailable.filter(x => !state.collected.has(x.item.id));
   }
   const byType = {
     fish: nowAvailable.filter(x => x.type==='fish'),
@@ -337,13 +335,13 @@ function renderTodayPanel() {
   };
 
   function todayRow(item, tags){
-    const warn = isLeavingNextMonth(item) ? ' <span class="warn">⚠️ 本月即将消失</span>' : '';
     const timeLabel = getTimeRangeLabel(item.hours);
+    const note = item.note ? '<span class="note">'+escapeHtml(item.note)+'</span>' : '';
     return '<div class="today-item"><span style="font-weight:600;min-width:80px">'
-      + escapeHtml(item.name) + '</span>' + tags
+      + escapeHtml(item.name) + '</span>' + tags + note
       + '<span style="font-size:12px;color:var(--color-text-muted)">' + timeLabel + '</span>'
       + '<span style="color:var(--color-accent-warm);font-weight:600;margin-left:auto">'
-      + item.price + ' 铃钱</span>' + warn + '</div>';
+      + item.price + ' 铃钱</span></div>';
   }
 
   let html = '<div class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader"><h3><span class="arrow">▶</span> 今日可捕捉 （'+monStr+' '+hour+'时）</h3><span style="font-size:13px;color:var(--color-text-muted)">'+nowAvailable.length+' 种生物可捕捉</span></div>';
@@ -359,7 +357,7 @@ function renderTodayPanel() {
     if (items.length === 0) {
       html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
     } else {
-      items.forEach(item => {
+      items.forEach(({ item }) => {
         let tags = '';
         if (t !== 'sea') tags += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
         if (item.shadowSize) tags += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
@@ -455,7 +453,7 @@ function renderFilters() {
   html += '<div class="filter-row"><span class="filter-label">出现月份</span><div class="filter-options" id="monthGrid">';
   const curMon = getLocalTime().getMonth() + 1;
   for (let m = 1; m <= CONFIG.MONTHS; m++) {
-    html += '<button class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' month-current':'')+'" data-filter="month" data-value="'+m+'">'+m+'</button>';
+    html += '<button class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' is-now':'')+'" data-filter="month" data-value="'+m+'">'+m+'</button>';
   }
   html += '</div></div>';
 
@@ -463,7 +461,7 @@ function renderFilters() {
   const curHr = getLocalTime().getHours();
   html += '<button class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all">全天</button>';
   for (let h = 0; h < CONFIG.HOURS; h++) {
-    html += '<button class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' month-current':'')+'" data-filter="hour" data-value="'+h+'">'+h+'</button>';
+    html += '<button class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' is-now':'')+'" data-filter="hour" data-value="'+h+'">'+h+'</button>';
   }
   html += '</div></div>';
 
@@ -522,95 +520,140 @@ document.getElementById('filterBar').addEventListener('click', e => {
   renderList();
 });
 
-function renderList() {
-  const tab = state.activeTab;
-  const data = DATA_MAP[tab];
-  const filtered = applyFilters(data, tab);
+// Header and rows live in their own persistent containers so a re-render can
+// replace one without destroying the other.
+document.getElementById('listSection').innerHTML =
+  '<div class="list-header" id="listHeader"></div><div id="listRows"></div>';
 
-  let html = '<div class="list-header">';
+// Row elements are cached by creature id and reused across renders. Rebuilding
+// #listSection wholesale meant parsing ~69KB of HTML and constructing every
+// element again for each filter tap; now a re-render only re-orders nodes that
+// already exist. What a row's markup bakes in — the tab, the hemisphere's
+// months, the current-month highlight — is tracked in rowCacheSig, and any
+// change there invalidates the whole cache.
+const rowCache = new Map();
+let rowCacheSig = '';
+// The bulk buttons act on whatever the last render filtered down to, and they
+// are bound once via delegation rather than re-bound per render.
+let lastFiltered = [];
+
+function buildRow(item, tab, northern, curMon) {
+  let html = '<div class="check-box"></div><div class="creature-main">';
+  html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
+  // Sea creatures are all 海洋底部 — a tag that never varies is pure noise.
+  if (tab !== 'sea') {
+    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+  }
+  if (item.shadowSize) {
+    html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+  }
+  // Weather is filterable on the bug tab, so it has to be visible on the row —
+  // otherwise a user who filters by 雨天 can't tell why a given row matched.
+  if (item.weather && item.weather !== '无限制') {
+    html += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
+  }
+  html += '<span class="tag-price">'+item.price+' 铃钱</span>';
+  // Capture notes are prose, not a filter dimension — rendered as plain text so
+  // they read differently from the tags beside them.
+  if (item.note) {
+    html += '<span class="note">'+escapeHtml(item.note)+'</span>';
+  }
+  html += '</div><div class="creature-meta"><div class="meta-row"><span class="meta-label">月:</span>';
+  const months = northern ? item.northMonths : item.southMonths;
+  for (let m = 1; m <= CONFIG.MONTHS; m++) {
+    html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
+  }
+  // Hour availability as a text range rather than 24 cells per row: the 24-cell
+  // grid was ~4800 elements for an 80-row list and dominated both the HTML
+  // payload and layout cost.
+  html += '</div><div class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
+    + getTimeRangeLabel(item.hours) + '</span></div></div>';
+
+  const el = document.createElement('div');
+  el.className = 'creature-item';
+  el.dataset.id = item.id;
+  el.innerHTML = html;
+  return el;
+}
+
+function renderListHeader(count) {
+  let html = '';
   CONFIG.SORT_KEYS.forEach(sk => {
     const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
     html += '<span class="sortable" data-sort="'+sk.key+'">'+sk.label+arrow+'</span> ';
   });
   html += '<span style="flex:1"></span>';
-  html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+filtered.length+' 条</span>';
+  html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+count+' 条</span>';
   html += '<button class="data-btn" id="markAllVisible" style="margin-left:8px;padding:4px 12px;font-size:12px">全标</button>';
   html += '<button class="data-btn" id="unmarkAllVisible" style="padding:4px 12px;font-size:12px">全取消</button>';
-  html += '</div>';
-
-  if (filtered.length === 0) {
-    html += '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
-  }
-
-  const curMon = getLocalTime().getMonth() + 1;
-  const northern = state.hemisphere === 'north';
-  filtered.forEach(item => {
-    const collected = state.collected.has(item.id);
-    html += '<div class="creature-item'+(collected?' collected':'')+'" data-id="'+item.id+'">';
-    html += '<div class="check-box"></div>';
-    html += '<div class="creature-main">';
-    html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
-    // Sea creatures are all 海洋底部 — a tag that never varies is pure noise.
-    if (tab !== 'sea') {
-      html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
-    }
-    if (item.shadowSize) {
-      html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
-    }
-    // Weather is filterable, so it has to be visible on the row — otherwise a
-    // user who filters by 雨天 can't tell why a given row matched.
-    if (item.weather && item.weather !== '无限制') {
-      html += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
-    }
-    html += '<span class="tag-price">'+item.price+' 铃钱</span>';
-    html += '</div>';
-
-    html += '<div class="creature-meta">';
-    html += '<div class="meta-row"><span class="meta-label">月:</span>';
-    const months = northern ? item.northMonths : item.southMonths;
-    for (let m = 1; m <= CONFIG.MONTHS; m++) {
-      html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
-    }
-    html += '</div>';
-    // Hour availability as a text range rather than 24 cells per row: the
-    // 24-cell grid was ~4800 elements for an 80-row list and dominated both
-    // the HTML payload and layout cost.
-    html += '<div class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-      + getTimeRangeLabel(item.hours) + '</span>';
-    html += '</div></div>';
-    html += '</div>';
-  });
-
-  document.getElementById('listSection').innerHTML = html;
-
-  // Bulk mark/unmark only changes collected state, which is a class toggle on
-  // rows that are already on screen — patch them in place instead of rebuilding
-  // the whole list. A rebuild is only needed when rows must appear/disappear
-  // (status filter) or reorder (collected sort).
-  function bulkSetCollected(add) {
-    if (filtered.length === 0) return;
-    const verb = add ? '标记' : '取消标记';
-    if (!confirm('确定要' + verb + '当前 ' + filtered.length + ' 条生物吗？此操作无法撤销。')) return;
-    filtered.forEach(x => add ? state.collected.add(x.id) : state.collected.delete(x.id));
-    saveCollected();
-    renderProgress();
-    const f = state.filters[state.activeTab];
-    if (f.status !== 'all' || state.sort.key === 'collected') {
-      renderList();
-    } else {
-      document.querySelectorAll('#listSection .creature-item').forEach(el => {
-        el.classList.toggle('collected', add);
-      });
-    }
-    showToast('已' + verb + ' ' + filtered.length + ' 条');
-  }
-
-  document.getElementById('markAllVisible').addEventListener('click', () => bulkSetCollected(true));
-  document.getElementById('unmarkAllVisible').addEventListener('click', () => bulkSetCollected(false));
+  document.getElementById('listHeader').innerHTML = html;
 }
 
-// Delegated listener for sort headers and creature rows, attached once.
+function renderList() {
+  const tab = state.activeTab;
+  const filtered = applyFilters(DATA_MAP[tab], tab);
+  lastFiltered = filtered;
+  renderListHeader(filtered.length);
+
+  const rows = document.getElementById('listRows');
+  if (filtered.length === 0) {
+    rows.innerHTML = '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
+    return;
+  }
+
+  const northern = state.hemisphere === 'north';
+  const curMon = getLocalTime().getMonth() + 1;
+  const sig = tab + '|' + northern + '|' + curMon;
+  if (sig !== rowCacheSig) {
+    rowCache.clear();
+    rowCacheSig = sig;
+  }
+
+  // Appending an existing node to the fragment detaches it from the old list,
+  // so reorders and removals fall out of rebuilding this in filtered order.
+  const frag = document.createDocumentFragment();
+  for (const item of filtered) {
+    let el = rowCache.get(item.id);
+    if (!el) {
+      el = buildRow(item, tab, northern, curMon);
+      rowCache.set(item.id, el);
+    }
+    el.classList.toggle('collected', state.collected.has(item.id));
+    frag.appendChild(el);
+  }
+  rows.replaceChildren(frag);
+}
+
+// Bulk mark/unmark only changes collected state, which is a class toggle on
+// rows already on screen — patch them in place instead of rebuilding. A rebuild
+// is only needed when rows must appear/disappear (status filter) or reorder
+// (collected sort).
+function bulkSetCollected(add) {
+  if (lastFiltered.length === 0) return;
+  const verb = add ? '标记' : '取消标记';
+  if (!confirm('确定要' + verb + '当前 ' + lastFiltered.length + ' 条生物吗？此操作无法撤销。')) return;
+  const count = lastFiltered.length;
+  lastFiltered.forEach(x => add ? state.collected.add(x.id) : state.collected.delete(x.id));
+  saveCollected();
+  renderProgress();
+  const f = state.filters[state.activeTab];
+  if (f.status !== 'all' || state.sort.key === 'collected') {
+    renderList();
+  } else {
+    document.querySelectorAll('#listRows .creature-item').forEach(el => {
+      el.classList.toggle('collected', add);
+    });
+  }
+  showToast('已' + verb + ' ' + count + ' 条');
+}
+
+// Delegated listener for the bulk buttons, sort headers and creature rows,
+// attached once. #listSection is persistent; only its inner containers are
+// re-rendered, so this survives re-renders without stacking duplicates.
 document.getElementById('listSection').addEventListener('click', e => {
+  if (e.target.closest('#markAllVisible')) return bulkSetCollected(true);
+  if (e.target.closest('#unmarkAllVisible')) return bulkSetCollected(false);
+
   const sortEl = e.target.closest('.sortable');
   if (sortEl) {
     const key = sortEl.dataset.sort;
@@ -685,7 +728,7 @@ function refreshTimeGrids() {
     monthGrid.querySelectorAll('[data-filter="month"]').forEach(btn => {
       const m = parseInt(btn.dataset.value);
       btn.classList.toggle('active', f.month === m);
-      btn.classList.toggle('month-current', m === curMon);
+      btn.classList.toggle('is-now', m === curMon);
     });
   }
 
@@ -695,42 +738,33 @@ function refreshTimeGrids() {
       const v = btn.dataset.value;
       const h = v === 'all' ? 'all' : parseInt(v);
       btn.classList.toggle('active', f.hour === h);
-      btn.classList.toggle('month-current', h === curHr);
+      btn.classList.toggle('is-now', h === curHr);
     });
   }
 }
 
-const initialTick = getLocalTime();
-// Seed from the current clock so the first interval fire is a no-op. Starting
-// at null made minute/hour always compare unequal, so 60s after load the hour
-// branch ran as if the clock had rolled over and silently narrowed the list.
-let lastTickMinute = initialTick.getMinutes();
-let lastTickHour = initialTick.getHours();
+// Seed from the current clock so the first interval fire is a no-op.
+let lastTickHour = getLocalTime().getHours();
 setInterval(() => {
-  const now = getLocalTime();
-  const minute = now.getMinutes();
-  const hour = now.getHours();
-  // Re-render the today panel only when the minute actually changed; the
-  // interval can fire late or the tab may be backgrounded, so guard against
-  // no-op rebuilds that destroy/rebind DOM for nothing.
-  if (minute !== lastTickMinute) {
-    lastTickMinute = minute;
-    renderTodayPanel();
+  const hour = getLocalTime().getHours();
+  // Everything clock-driven here is hour-granular: the today panel filters by
+  // hour and its header shows no minutes, and the hour filter follows the
+  // clock. So a minute tick has nothing to update — re-rendering on it only
+  // destroyed and rebound DOM for an identical result.
+  if (hour === lastTickHour) return;
+  lastTickHour = hour;
+
+  renderTodayPanel();
+  // Follow the clock with the hour filter — but only until the user picks an
+  // hour themselves (hourManual). Their choice stays put; hitting 重置全部
+  // hands control back to the clock. Every tab follows, otherwise switching
+  // tabs surfaces a stale hour from whenever that tab was last active.
+  for (const tab of CONFIG.TABS) {
+    if (!state.filters[tab].hourManual) state.filters[tab].hour = hour;
   }
-  // When the hour rolls over, follow the clock with the hour filter — but
-  // only until the user picks an hour themselves (hourManual). Their choice
-  // stays put; hitting 重置全部 hands control back to the clock. Every tab
-  // follows, otherwise switching tabs surfaces a stale hour from whenever
-  // that tab last happened to be the active one.
-  if (hour !== lastTickHour) {
-    lastTickHour = hour;
-    for (const tab of CONFIG.TABS) {
-      if (!state.filters[tab].hourManual) state.filters[tab].hour = hour;
-    }
-    saveUIState();
-    refreshTimeGrids();
-    renderList();
-  }
+  saveUIState();
+  refreshTimeGrids();
+  renderList();
 }, CONFIG.TICK_MS);
 
 renderDataBar();

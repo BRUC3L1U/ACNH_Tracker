@@ -806,7 +806,8 @@ const BUG_DATA = [
   {
     id: "bug_001",
     name: "白粉蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
     southMonths: [3,4,5,6,7,8,9,10,11,12],
@@ -816,7 +817,8 @@ const BUG_DATA = [
   {
     id: "bug_002",
     name: "斑缘点粉蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,9,10],
     southMonths: [3,4,9,10,11,12],
@@ -826,7 +828,8 @@ const BUG_DATA = [
   {
     id: "bug_003",
     name: "凤蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9],
     southMonths: [1,2,3,9,10,11,12],
@@ -836,7 +839,8 @@ const BUG_DATA = [
   {
     id: "bug_004",
     name: "乌鸦凤蝶",
-    location: "绿地（飞行） 异色花",
+    location: "绿地",
+    note: "飞行；异色花附近",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6],
     southMonths: [9,10,11,12],
@@ -846,7 +850,8 @@ const BUG_DATA = [
   {
     id: "bug_005",
     name: "青带凤蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8],
     southMonths: [1,2,10,11,12],
@@ -856,7 +861,8 @@ const BUG_DATA = [
   {
     id: "bug_006",
     name: "大白斑蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -866,7 +872,8 @@ const BUG_DATA = [
   {
     id: "bug_007",
     name: "大紫蛱蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "无限制",
     northMonths: [5,6,7,8],
     southMonths: [1,2,11,12],
@@ -876,7 +883,8 @@ const BUG_DATA = [
   {
     id: "bug_008",
     name: "大桦斑蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [9,10,11],
     southMonths: [3,4,5],
@@ -886,7 +894,8 @@ const BUG_DATA = [
   {
     id: "bug_009",
     name: "大蓝闪蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,6,7,8,9,12],
     southMonths: [1,2,3,6,7,8,9,12],
@@ -896,7 +905,8 @@ const BUG_DATA = [
   {
     id: "bug_010",
     name: "彩袄蛱蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9],
     southMonths: [1,2,3,10,11,12],
@@ -906,7 +916,8 @@ const BUG_DATA = [
   {
     id: "bug_011",
     name: "红颈凤蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,4,5,6,7,8,9,12],
     southMonths: [1,2,3,6,7,8,10,11,12],
@@ -916,7 +927,8 @@ const BUG_DATA = [
   {
     id: "bug_012",
     name: "亚历山大凤蝶",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [5,6,7,8,9],
     southMonths: [1,2,3,11,12],
@@ -926,7 +938,8 @@ const BUG_DATA = [
   {
     id: "bug_013",
     name: "飞蛾",
-    location: "户外灯光附近飞行",
+    location: "其他",
+    note: "户外灯光附近飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -946,7 +959,8 @@ const BUG_DATA = [
   {
     id: "bug_015",
     name: "日落蛾",
-    location: "绿地（飞行）",
+    location: "绿地",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9],
     southMonths: [1,2,3,10,11,12],
@@ -956,7 +970,8 @@ const BUG_DATA = [
   {
     id: "bug_016",
     name: "中华剑角蝗",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9,10,11],
     southMonths: [1,2,3,4,5,10,11,12],
@@ -966,7 +981,8 @@ const BUG_DATA = [
   {
     id: "bug_017",
     name: "飞蝗",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [8,9,10,11],
     southMonths: [2,3,4,5],
@@ -976,7 +992,8 @@ const BUG_DATA = [
   {
     id: "bug_018",
     name: "稻蝗",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [8,9,10,11],
     southMonths: [2,3,4,5],
@@ -986,7 +1003,8 @@ const BUG_DATA = [
   {
     id: "bug_019",
     name: "蚱蜢",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [7,8,9],
     southMonths: [1,2,3],
@@ -996,7 +1014,8 @@ const BUG_DATA = [
   {
     id: "bug_020",
     name: "蟋蟀",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [9,10,11],
     southMonths: [3,4,5],
@@ -1006,7 +1025,8 @@ const BUG_DATA = [
   {
     id: "bug_021",
     name: "铃虫",
-    location: "草地（地面跳跃）",
+    location: "草地",
+    note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [9,10],
     southMonths: [3,4],
@@ -1016,7 +1036,8 @@ const BUG_DATA = [
   {
     id: "bug_022",
     name: "螳螂",
-    location: "花朵上（会逃走）",
+    location: "花朵",
+    note: "会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9,10,11],
     southMonths: [1,2,3,4,5,9,10,11,12],
@@ -1026,7 +1047,8 @@ const BUG_DATA = [
   {
     id: "bug_023",
     name: "兰花螳螂",
-    location: "花朵上（会逃走）（白色花）",
+    location: "花朵",
+    note: "白色花；会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9,10,11],
     southMonths: [1,2,3,4,5,9,10,11,12],
@@ -1036,7 +1058,8 @@ const BUG_DATA = [
   {
     id: "bug_024",
     name: "蜜蜂",
-    location: "花丛附近（飞行）",
+    location: "花朵",
+    note: "花丛附近飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7],
     southMonths: [1,9,10,11,12],
@@ -1046,7 +1069,8 @@ const BUG_DATA = [
   {
     id: "bug_025",
     name: "黄蜂",
-    location: "摇晃或敲击树干落下蜂巢中出现",
+    location: "树干",
+    note: "摇晃或敲击树干，落下蜂巢中出现",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1056,7 +1080,8 @@ const BUG_DATA = [
   {
     id: "bug_026",
     name: "油蝉",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1066,7 +1091,8 @@ const BUG_DATA = [
   {
     id: "bug_027",
     name: "斑透翅蝉",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1076,7 +1102,8 @@ const BUG_DATA = [
   {
     id: "bug_028",
     name: "熊蝉",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1086,7 +1113,8 @@ const BUG_DATA = [
   {
     id: "bug_029",
     name: "寒蝉",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [8,9],
     southMonths: [2,3],
@@ -1096,7 +1124,8 @@ const BUG_DATA = [
   {
     id: "bug_030",
     name: "暮蝉",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1106,7 +1135,8 @@ const BUG_DATA = [
   {
     id: "bug_031",
     name: "蝉蜕",
-    location: "树干（除椰子和香蕉树等）",
+    location: "树干",
+    note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1116,7 +1146,8 @@ const BUG_DATA = [
   {
     id: "bug_032",
     name: "红蜻蜓",
-    location: "水边（飞行）",
+    location: "水边",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [9,10],
     southMonths: [3,4],
@@ -1126,7 +1157,8 @@ const BUG_DATA = [
   {
     id: "bug_033",
     name: "绿胸晏蜓",
-    location: "水边（飞行）",
+    location: "水边",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9,10],
     southMonths: [1,2,3,4,10,11,12],
@@ -1136,7 +1168,8 @@ const BUG_DATA = [
   {
     id: "bug_034",
     name: "无霸勾蜓",
-    location: "水边（飞行）",
+    location: "水边",
+    note: "飞行",
     weather: "雨雪天除外",
     northMonths: [5,6,7,8,9,10],
     southMonths: [1,2,3,4,11,12],
@@ -1146,7 +1179,8 @@ const BUG_DATA = [
   {
     id: "bug_035",
     name: "豆娘",
-    location: "水边（飞行）",
+    location: "水边",
+    note: "飞行",
     weather: "雨天除外",
     northMonths: [1,2,11,12],
     southMonths: [5,6,7,8],
@@ -1156,7 +1190,8 @@ const BUG_DATA = [
   {
     id: "bug_036",
     name: "萤火虫",
-    location: "淡水附近",
+    location: "水边",
+    note: "淡水附近飞行",
     weather: "雨雪天除外",
     northMonths: [6],
     southMonths: [12],
@@ -1166,7 +1201,8 @@ const BUG_DATA = [
   {
     id: "bug_037",
     name: "蝼蛄",
-    location: "地面下（听声音挖掘地面）",
+    location: "地面",
+    note: "听声音挖掘地面",
     weather: "无限制",
     northMonths: [1,2,3,4,5,11,12],
     southMonths: [5,6,7,8,9,10,11],
@@ -1176,7 +1212,8 @@ const BUG_DATA = [
   {
     id: "bug_038",
     name: "水黾",
-    location: "池塘（水面滑行）",
+    location: "水中",
+    note: "池塘水面滑行",
     weather: "雪天除外",
     northMonths: [5,6,7,8,9],
     southMonths: [1,2,3,11,12],
@@ -1186,7 +1223,8 @@ const BUG_DATA = [
   {
     id: "bug_039",
     name: "龙虱",
-    location: "河流或池塘里",
+    location: "水中",
+    note: "河流或池塘",
     weather: "无限制",
     northMonths: [5,6,7,8,9],
     southMonths: [1,2,3,11,12],
@@ -1196,7 +1234,8 @@ const BUG_DATA = [
   {
     id: "bug_040",
     name: "田鳖",
-    location: "河流或池塘里",
+    location: "水中",
+    note: "河流或池塘",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9],
     southMonths: [1,2,3,10,11,12],
@@ -1206,7 +1245,8 @@ const BUG_DATA = [
   {
     id: "bug_041",
     name: "椿象",
-    location: "花朵上（会逃走）",
+    location: "花朵",
+    note: "会逃走",
     weather: "无限制",
     northMonths: [3,4,5,6,7,8,9,10],
     southMonths: [1,2,3,4,9,10,11,12],
@@ -1216,7 +1256,8 @@ const BUG_DATA = [
   {
     id: "bug_042",
     name: "人面樁象",
-    location: "花朵上（会逃走）",
+    location: "花朵",
+    note: "会逃走",
     weather: "无限制",
     northMonths: [3,4,5,6,7,8,9,10],
     southMonths: [1,2,3,4,9,10,11,12],
@@ -1226,7 +1267,8 @@ const BUG_DATA = [
   {
     id: "bug_043",
     name: "瓢虫",
-    location: "花朵上（会逃走）",
+    location: "花朵",
+    note: "会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,10],
     southMonths: [4,9,10,11,12],
@@ -1236,7 +1278,8 @@ const BUG_DATA = [
   {
     id: "bug_044",
     name: "虎甲虫",
-    location: "草地（地面爬行）",
+    location: "草地",
+    note: "地面爬行",
     weather: "雨雪天除外",
     northMonths: [2,3,4,5,6,7,8,9,10],
     southMonths: [1,2,3,4,8,9,10,11,12],
@@ -1296,7 +1339,8 @@ const BUG_DATA = [
   {
     id: "bug_050",
     name: "蜣螂",
-    location: "雪球附近出现",
+    location: "其他",
+    note: "雪球附近出现",
     weather: "无限制",
     northMonths: [1,2,12],
     southMonths: [6,7,8],
@@ -1306,7 +1350,8 @@ const BUG_DATA = [
   {
     id: "bug_051",
     name: "雪隐金龟",
-    location: "草地（地面爬行）",
+    location: "草地",
+    note: "地面爬行",
     weather: "无限制",
     northMonths: [7,8,9],
     southMonths: [1,2,3],
@@ -1336,7 +1381,7 @@ const BUG_DATA = [
   {
     id: "bug_054",
     name: "歌利亚大角花金龟",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [6,7,8,9],
     southMonths: [1,2,3,12],
@@ -1386,7 +1431,7 @@ const BUG_DATA = [
   {
     id: "bug_059",
     name: "细身赤锹形虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1396,7 +1441,7 @@ const BUG_DATA = [
   {
     id: "bug_060",
     name: "黄金鬼锹形虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1406,7 +1451,7 @@ const BUG_DATA = [
   {
     id: "bug_061",
     name: "长颈鹿锯锹形虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1426,7 +1471,7 @@ const BUG_DATA = [
   {
     id: "bug_063",
     name: "高卡萨斯南洋大兜虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1436,7 +1481,7 @@ const BUG_DATA = [
   {
     id: "bug_064",
     name: "象兜虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1446,7 +1491,7 @@ const BUG_DATA = [
   {
     id: "bug_065",
     name: "长戟大兜虫",
-    location: "椰子树树干",
+    location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
     southMonths: [1,2],
@@ -1466,7 +1511,8 @@ const BUG_DATA = [
   {
     id: "bug_067",
     name: "叶竹节虫",
-    location: "树下拟态为叶片（家具物品形式）",
+    location: "树干",
+    note: "拟态为叶片（家具物品形式）",
     weather: "无限制",
     northMonths: [7,8,9],
     southMonths: [1,2,3],
@@ -1476,7 +1522,8 @@ const BUG_DATA = [
   {
     id: "bug_068",
     name: "蓑衣虫",
-    location: "树干（摇晃或敲击垂下）",
+    location: "树干",
+    note: "摇晃或敲击垂下",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1486,7 +1533,8 @@ const BUG_DATA = [
   {
     id: "bug_069",
     name: "蚂蚁",
-    location: "地面（下雨或有腐烂的大头菜）",
+    location: "地面",
+    note: "下雨或有腐烂的大头菜时出现",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1496,7 +1544,8 @@ const BUG_DATA = [
   {
     id: "bug_070",
     name: "寄居蟹",
-    location: "沙滩（平时像是个贝壳）",
+    location: "沙滩",
+    note: "平时像是个贝壳",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1516,7 +1565,8 @@ const BUG_DATA = [
   {
     id: "bug_072",
     name: "苍蝇",
-    location: "飞行（腐烂的大头菜和垃圾等）",
+    location: "其他",
+    note: "腐烂的大头菜和垃圾附近飞行",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1526,7 +1576,8 @@ const BUG_DATA = [
   {
     id: "bug_073",
     name: "蚊子",
-    location: "随机出现（飞到附近会有嗡嗡）",
+    location: "其他",
+    note: "随机出现（飞到附近会有嗡嗡声）",
     weather: "雨雪天除外",
     northMonths: [6,7,8,9],
     southMonths: [1,2,3,12],
@@ -1536,7 +1587,8 @@ const BUG_DATA = [
   {
     id: "bug_074",
     name: "跳蚤",
-    location: "居民身上",
+    location: "其他",
+    note: "居民身上",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9,10,11],
     southMonths: [1,2,3,4,5,10,11,12],
@@ -1546,7 +1598,8 @@ const BUG_DATA = [
   {
     id: "bug_075",
     name: "蜗牛",
-    location: "岩石或灌木上（会逃走）",
+    location: "岩石",
+    note: "岩石或灌木上；会逃走",
     weather: "雨天",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1556,7 +1609,8 @@ const BUG_DATA = [
   {
     id: "bug_076",
     name: "鼠妇",
-    location: "岩石（敲击）",
+    location: "岩石",
+    note: "敲击岩石",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
     southMonths: [3,4,5,6,7,8,9,10,11,12],
@@ -1566,7 +1620,8 @@ const BUG_DATA = [
   {
     id: "bug_077",
     name: "蜈蚣",
-    location: "岩石（敲击）",
+    location: "岩石",
+    note: "敲击岩石",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
     southMonths: [3,4,5,6,7,8,9,10,11,12],
@@ -1576,7 +1631,8 @@ const BUG_DATA = [
   {
     id: "bug_078",
     name: "蜘蛛",
-    location: "树干（摇晃或敲击垂下）",
+    location: "树干",
+    note: "摇晃或敲击垂下",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
     southMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
@@ -1586,7 +1642,8 @@ const BUG_DATA = [
   {
     id: "bug_079",
     name: "狼蛛",
-    location: "草地和普通地面（拿着捕虫网靠近会主动攻击）",
+    location: "草地",
+    note: "地面爬行；靠近会主动攻击",
     weather: "无限制",
     northMonths: [1,2,3,4,11,12],
     southMonths: [5,6,7,8,9,10],
@@ -1596,7 +1653,8 @@ const BUG_DATA = [
   {
     id: "bug_080",
     name: "蝎子",
-    location: "草地和普通地面（拿着捕虫网靠近会主动攻击）",
+    location: "草地",
+    note: "地面爬行；靠近会主动攻击",
     weather: "无限制",
     northMonths: [5,6,7,8,9,10],
     southMonths: [1,2,3,4,11,12],
