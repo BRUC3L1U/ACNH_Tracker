@@ -1,26 +1,17 @@
 const TAB_NAMES = { bug: '虫', fish: '鱼', sea: '海洋生物' };
 
 const CONFIG = {
-  STORAGE_KEYS: { collected: 'acnh_collected', hemisphere: 'acnh_hemisphere' },
+  STORAGE_KEYS: { collected: 'acnh_collected', hemisphere: 'acnh_hemisphere', ui: 'acnh_ui' },
   TICK_MS: 60000,
   MONTHS: 12,
   HOURS: 24,
   TABS: Object.keys(TAB_NAMES),
   SORT_KEYS: [{key:'name',label:'名称'},{key:'price',label:'价格'},{key:'collected',label:'收集'}],
-  STATUS_OPTS: [['all','全部'],['uncollected','未收集'],['collected','已收集']],
-  SEARCH_DEBOUNCE_MS: 150
+  STATUS_OPTS: [['all','全部'],['uncollected','未收集'],['collected','已收集']]
 };
 
 function escapeHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function highlightMatch(text, query){
-  const t = String(text == null ? '' : text);
-  if (!query) return escapeHtml(t);
-  const idx = t.toLowerCase().indexOf(query.toLowerCase());
-  if (idx < 0) return escapeHtml(t);
-  return escapeHtml(t.slice(0, idx)) + '<mark>' + escapeHtml(t.slice(idx, idx + query.length)) + '</mark>' + escapeHtml(t.slice(idx + query.length));
 }
 
 let toastTimer = null;
@@ -38,11 +29,6 @@ function showToast(msg){
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
-}
-
-function debounce(fn, ms){
-  let t;
-  return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), ms); };
 }
 
 function toggleArrayFilter(name, value){
@@ -80,21 +66,64 @@ const ALL_DATA = [
   ...DATA_MAP.sea.map(x => Object.assign(x, {type:'sea'}))
 ];
 
+// Each tab only carries the array filters its data actually has, so
+// applyFilters' tab guards and the key set stay in agreement.
+function makeFilters(tab){
+  const f = { month:null, hour:null, hourManual:false, status:'all' };
+  if (tab === 'fish' || tab === 'bug') f.location = [];
+  if (tab === 'fish' || tab === 'sea') f.shadowSize = [];
+  if (tab === 'bug') f.weather = [];
+  return f;
+}
+
+// UI state (active tab, filters, sort, panel collapses) survives reloads.
+// hourManual is deliberately NOT persisted: a fresh page should resume
+// following the clock, and only a live hour click hands control to the user.
+function loadUIState() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.ui)); } catch {}
+  if (!saved || typeof saved !== 'object') saved = {};
+  const filters = { fish: makeFilters('fish'), bug: makeFilters('bug'), sea: makeFilters('sea') };
+  for (const tab of CONFIG.TABS) {
+    const s = saved.filters && saved.filters[tab];
+    if (!s) continue;
+    const target = filters[tab];
+    for (const key of Object.keys(target)) {
+      if (key !== 'hourManual' && key in s) target[key] = s[key];
+    }
+  }
+  return {
+    activeTab: CONFIG.TABS.includes(saved.activeTab) ? saved.activeTab : 'bug',
+    filters,
+    sort: saved.sort && CONFIG.SORT_KEYS.some(k => k.key === saved.sort.key)
+      ? { key: saved.sort.key, dir: saved.sort.dir === 'desc' ? 'desc' : 'asc' }
+      : { key: null, dir: 'asc' },
+    todayOpen: !!saved.todayOpen,
+    filterOpen: !!saved.filterOpen,
+    todayUncollectedOnly: !!saved.todayUncollectedOnly,
+    todayGroups: { fish: true, bug: true, sea: true, ...(saved.todayGroups || {}) }
+  };
+}
+
 const state = {
-  activeTab: 'bug',
+  ...loadUIState(),
   hemisphere: localStorage.getItem(CONFIG.STORAGE_KEYS.hemisphere) === 'south' ? 'south' : 'north',
   collected: loadCollected(),
-  filters: {
-    fish: { location:[], shadowSize:[], month:null, hour:null, hourManual:false, status:'all', search:'' },
-    bug:  { location:[], weather:[], month:null, hour:null, hourManual:false, status:'all', search:'' },
-    sea:  { shadowSize:[], month:null, hour:null, hourManual:false, status:'all', search:'' }
-  },
-  sort: { key: null, dir: 'asc' },
-  todayOpen: false,
-  filterOpen: false,
-  todayUncollectedOnly: false,
-  todayGroups: { fish: true, bug: true, sea: true }
 };
+
+function saveUIState() {
+  try {
+    localStorage.setItem(CONFIG.STORAGE_KEYS.ui, JSON.stringify({
+      activeTab: state.activeTab,
+      filters: state.filters,
+      sort: state.sort,
+      todayOpen: state.todayOpen,
+      filterOpen: state.filterOpen,
+      todayUncollectedOnly: state.todayUncollectedOnly,
+      todayGroups: state.todayGroups
+    }));
+  } catch {}
+}
 
 function loadCollected() {
   try {
@@ -151,10 +180,14 @@ function importCollected(e) {
       state.collected = incoming;
       saveCollected();
       renderAll();
-      alert('导入成功，共 ' + state.collected.size + ' 条记录');
+      showToast('导入成功，共 ' + state.collected.size + ' 条记录');
     } catch (err) {
-      alert('导入失败：' + err.message);
+      showToast('导入失败：' + err.message);
     }
+    e.target.value = '';
+  };
+  reader.onerror = () => {
+    showToast('导入失败：无法读取文件');
     e.target.value = '';
   };
   reader.readAsText(file);
@@ -197,14 +230,6 @@ function getTimeRangeLabel(hours) {
 function applyFilters(data, tab) {
   let items = [...data];
   const f = state.filters[tab];
-
-  if (f.search) {
-    const s = f.search.toLowerCase();
-    items = items.filter(x => {
-      const hay = x.name + ' ' + (x.location||'') + ' ' + (x.weather||'') + ' ' + (x.shadowSize||'');
-      return hay.toLowerCase().includes(s);
-    });
-  }
 
   if (tab === 'fish' || tab === 'bug') {
     if (f.location.length > 0) items = items.filter(x => f.location.includes(x.location));
@@ -329,10 +354,12 @@ function renderTodayPanel() {
 
   document.getElementById('todayHeader').addEventListener('click', () => {
     state.todayOpen = !state.todayOpen;
+    saveUIState();
     renderTodayPanel();
   });
   document.getElementById('todayUncollected').addEventListener('change', e => {
     state.todayUncollectedOnly = e.target.checked;
+    saveUIState();
     renderTodayPanel();
   });
   // Group headers toggle in place (no full re-render); state.todayGroups
@@ -343,6 +370,7 @@ function renderTodayPanel() {
       state.todayGroups[g] = !state.todayGroups[g];
       h.classList.toggle('open', state.todayGroups[g]);
       document.getElementById('todayGroup-' + g).classList.toggle('open', state.todayGroups[g]);
+      saveUIState();
     });
   });
   bindHemisphereButtons(document.getElementById('todayPanel'));
@@ -416,8 +444,7 @@ function renderFilters() {
   }
   html += '</div></div>';
 
-  html += '<div class="filter-row"><span class="filter-label">搜索</span>';
-  html += '<input class="filter-search" id="filterSearch" type="text" placeholder="按名称/场所/天气模糊搜索..." value="'+escapeHtml(f.search)+'">';
+  html += '<div class="filter-row"><span style="flex:1"></span>';
   html += '<button class="filter-reset" id="filterReset">重置全部</button>';
   html += '</div></div>';
 
@@ -425,17 +452,18 @@ function renderFilters() {
 
   document.getElementById('filterToggle').addEventListener('click', () => {
     state.filterOpen = !state.filterOpen;
+    saveUIState();
     renderFilters();
   });
 
   bindHemisphereButtons(document.getElementById('filterBar'));
 
-  const onSearch = debounce(function(){ state.filters[state.activeTab].search = this.value; renderList(); }, CONFIG.SEARCH_DEBOUNCE_MS);
-  document.getElementById('filterSearch').addEventListener('input', onSearch);
-
   document.getElementById('filterReset').addEventListener('click', () => {
-    // Resetting hands hour control back to the clock.
-    state.filters[state.activeTab] = { location:[], shadowSize:[], weather:[], month:null, hour:null, hourManual:false, status:'all', search:'' };
+    // Resetting hands hour control back to the clock, and clears sort too —
+    // the button says 重置全部, so leaving sort applied would be a lie.
+    state.filters[state.activeTab] = makeFilters(state.activeTab);
+    state.sort = { key: null, dir: 'asc' };
+    saveUIState();
     renderFilters();
     renderList();
   });
@@ -466,6 +494,7 @@ document.getElementById('filterBar').addEventListener('click', e => {
       state.filters[tab].hour = state.filters[tab].hour === parseInt(value) ? null : parseInt(value);
     }
   }
+  saveUIState();
   renderFilters();
   renderList();
 });
@@ -490,51 +519,63 @@ function renderList() {
     html += '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
   }
 
+  const curMon = getLocalTime().getMonth() + 1;
+  const northern = state.hemisphere === 'north';
   filtered.forEach(item => {
     const collected = state.collected.has(item.id);
-    const q = state.filters[tab].search.trim();
     html += '<div class="creature-item'+(collected?' collected':'')+'" data-id="'+item.id+'">';
     html += '<div class="check-box"></div>';
     html += '<div class="creature-main">';
-    html += '<span class="creature-name">'+highlightMatch(item.name, q)+'</span>';
-    html += '<span class="tag tag-location">'+highlightMatch(item.location, q)+'</span>';
+    html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
+    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
     if (item.shadowSize) {
-      html += '<span class="tag tag-shadow">'+highlightMatch(item.shadowSize, q)+'</span>';
+      html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
     }
     html += '<span class="tag-price">'+item.price+' 铃钱</span>';
     html += '</div>';
 
     html += '<div class="creature-meta">';
-    html += '<div class="meta-row"><span style="min-width:40px;font-size:11px">月:</span>';
-    const months = state.hemisphere === 'north' ? item.northMonths : item.southMonths;
-    const curMon = getLocalTime().getMonth() + 1;
+    html += '<div class="meta-row"><span class="meta-label">月:</span>';
+    const months = northern ? item.northMonths : item.southMonths;
     for (let m = 1; m <= CONFIG.MONTHS; m++) {
       html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
     }
     html += '</div>';
-    html += '<div class="meta-row"><span style="min-width:40px;font-size:11px">时:</span>';
-    const curHr = getLocalTime().getHours();
-    for (let h = 0; h < CONFIG.HOURS; h++) {
-      html += '<span class="heat-cell heat-cell-hour'+(item.hours.includes(h)?' on':'')+(h===curHr?' current':'')+'">'+h+'</span>';
-    }
+    // Hour availability as a text range rather than 24 cells per row: the
+    // 24-cell grid was ~4800 elements for an 80-row list and dominated both
+    // the HTML payload and layout cost.
+    html += '<div class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
+      + getTimeRangeLabel(item.hours) + '</span>';
     html += '</div></div>';
     html += '</div>';
   });
 
   document.getElementById('listSection').innerHTML = html;
 
-  document.getElementById('markAllVisible').addEventListener('click', () => {
-    filtered.forEach(x => state.collected.add(x.id));
+  // Bulk mark/unmark only changes collected state, which is a class toggle on
+  // rows that are already on screen — patch them in place instead of rebuilding
+  // the whole list. A rebuild is only needed when rows must appear/disappear
+  // (status filter) or reorder (collected sort).
+  function bulkSetCollected(add) {
+    if (filtered.length === 0) return;
+    const verb = add ? '标记' : '取消标记';
+    if (!confirm('确定要' + verb + '当前 ' + filtered.length + ' 条生物吗？此操作无法撤销。')) return;
+    filtered.forEach(x => add ? state.collected.add(x.id) : state.collected.delete(x.id));
     saveCollected();
     renderProgress();
-    renderList();
-  });
-  document.getElementById('unmarkAllVisible').addEventListener('click', () => {
-    filtered.forEach(x => state.collected.delete(x.id));
-    saveCollected();
-    renderProgress();
-    renderList();
-  });
+    const f = state.filters[state.activeTab];
+    if (f.status !== 'all' || state.sort.key === 'collected') {
+      renderList();
+    } else {
+      document.querySelectorAll('#listSection .creature-item').forEach(el => {
+        el.classList.toggle('collected', add);
+      });
+    }
+    showToast('已' + verb + ' ' + filtered.length + ' 条');
+  }
+
+  document.getElementById('markAllVisible').addEventListener('click', () => bulkSetCollected(true));
+  document.getElementById('unmarkAllVisible').addEventListener('click', () => bulkSetCollected(false));
 }
 
 // Delegated listener for sort headers and creature rows, attached once.
@@ -548,6 +589,7 @@ document.getElementById('listSection').addEventListener('click', e => {
       state.sort.key = key;
       state.sort.dir = 'asc';
     }
+    saveUIState();
     renderList();
     return;
   }
@@ -596,11 +638,43 @@ document.getElementById('navTabs').addEventListener('click', e => {
   if (!btn) return;
   state.activeTab = btn.dataset.tab;
   state.filterOpen = false;
+  saveUIState();
   renderAll();
 });
 
-let lastTickMinute = null;
-let lastTickHour = null;
+// Update the month/hour grids in place instead of re-rendering the whole
+// filter bar, so an hour rollover can't discard focus or scroll position.
+function refreshTimeGrids() {
+  const f = state.filters[state.activeTab];
+  const curMon = getLocalTime().getMonth() + 1;
+  const curHr = getLocalTime().getHours();
+
+  const monthGrid = document.getElementById('monthGrid');
+  if (monthGrid) {
+    monthGrid.querySelectorAll('[data-filter="month"]').forEach(btn => {
+      const m = parseInt(btn.dataset.value);
+      btn.classList.toggle('active', f.month === m);
+      btn.classList.toggle('month-current', m === curMon);
+    });
+  }
+
+  const hourGrid = document.getElementById('hourGrid');
+  if (hourGrid) {
+    hourGrid.querySelectorAll('[data-filter="hour"]').forEach(btn => {
+      const v = btn.dataset.value;
+      const h = v === 'all' ? 'all' : parseInt(v);
+      btn.classList.toggle('active', f.hour === h);
+      btn.classList.toggle('month-current', h === curHr);
+    });
+  }
+}
+
+const initialTick = getLocalTime();
+// Seed from the current clock so the first interval fire is a no-op. Starting
+// at null made minute/hour always compare unequal, so 60s after load the hour
+// branch ran as if the clock had rolled over and silently narrowed the list.
+let lastTickMinute = initialTick.getMinutes();
+let lastTickHour = initialTick.getHours();
 setInterval(() => {
   const now = getLocalTime();
   const minute = now.getMinutes();
@@ -614,14 +688,16 @@ setInterval(() => {
   }
   // When the hour rolls over, follow the clock with the hour filter — but
   // only until the user picks an hour themselves (hourManual). Their choice
-  // stays put; hitting 重置全部 hands control back to the clock.
+  // stays put; hitting 重置全部 hands control back to the clock. Every tab
+  // follows, otherwise switching tabs surfaces a stale hour from whenever
+  // that tab last happened to be the active one.
   if (hour !== lastTickHour) {
     lastTickHour = hour;
-    const tab = state.activeTab;
-    if (state.filters[tab] && !state.filters[tab].hourManual) {
-      state.filters[tab].hour = hour;
+    for (const tab of CONFIG.TABS) {
+      if (!state.filters[tab].hourManual) state.filters[tab].hour = hour;
     }
-    renderFilters();
+    saveUIState();
+    refreshTimeGrids();
     renderList();
   }
 }, CONFIG.TICK_MS);
