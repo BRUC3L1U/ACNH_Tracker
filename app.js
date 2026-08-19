@@ -15,7 +15,8 @@ function escapeHtml(s){
 }
 
 let toastTimer = null;
-function showToast(msg){
+function showToast(msg, opts){
+  opts = opts || {};
   let el = document.getElementById('toast');
   if (!el) {
     el = document.createElement('div');
@@ -24,11 +25,86 @@ function showToast(msg){
     document.body.appendChild(el);
   }
   el.textContent = msg;
+  // An optional inline action (撤销 on bulk operations). textContent above
+  // wipes any button left over from a previous toast, so the new one is
+  // appended into a clean slate.
+  if (opts.action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.type = 'button';
+    btn.textContent = opts.action.label;
+    btn.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      el.classList.remove('show');
+      opts.action.onClick();
+    });
+    el.appendChild(btn);
+  }
   // Force reflow so re-triggering while visible restarts the transition.
   void el.offsetWidth;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  // Action toasts outlive plain ones — an undo affordance that vanishes in
+  // 2.6s is a tease, not a safety net.
+  toastTimer = setTimeout(() => el.classList.remove('show'), opts.duration || 2600);
+}
+
+// Native confirm() is gone: it blocks, it ignores the page's styling, and it
+// offers no focus handling. This in-page dialog replaces it — but only for
+// actions that replace everything at once and are too important to trust to
+// a transient toast (import-overwrite). Bulk mark/unmark skips it entirely
+// and relies on the toast's 撤销 action instead: undo is strictly safer than
+// a confirm that can't be taken back once clicked.
+// Escape/backdrop/取消 = cancel, Enter or 确定 = confirm; focus is restored
+// to whatever had it before the dialog opened.
+function confirmDialog(message, confirmLabel) {
+  return new Promise(resolve => {
+    const prevFocus = document.activeElement;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal" role="dialog" aria-modal="true">'
+      + '<p class="modal-msg"></p>'
+      + '<div class="modal-btns">'
+      + '<button type="button" class="modal-btn" data-r="cancel">取消</button>'
+      + '<button type="button" class="modal-btn modal-btn-confirm" data-r="ok"></button>'
+      + '</div></div>';
+    overlay.querySelector('.modal-msg').textContent = message;
+    const okBtn = overlay.querySelector('[data-r="ok"]');
+    okBtn.textContent = confirmLabel || '确定';
+    let done = false;
+    const close = result => {
+      if (done) return;
+      done = true;
+      overlay.classList.remove('show');
+      document.removeEventListener('keydown', onKey);
+      // Let the fade-out finish before detaching, then hand focus back.
+      setTimeout(() => {
+        overlay.remove();
+        if (prevFocus && prevFocus.isConnected) prevFocus.focus();
+      }, 200);
+      resolve(result);
+    };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); close(false); return; }
+      if (e.key === 'Enter') {
+        // Enter on a focused button should activate that button, not force
+        // confirm — only a bare Enter (dialog itself focused) confirms.
+        if (e.target && e.target.closest && e.target.closest('[data-r]')) return;
+        close(true);
+      }
+    };
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) return close(false);
+      const btn = e.target.closest('[data-r]');
+      if (btn) close(btn.dataset.r === 'ok');
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => overlay.classList.add('show'));
+    else overlay.classList.add('show');
+    okBtn.focus();
+  });
 }
 
 function toggleArrayFilter(name, value){
@@ -37,24 +113,33 @@ function toggleArrayFilter(name, value){
   idx >= 0 ? arr.splice(idx,1) : arr.push(value);
 }
 
+// Shared by the today panel's per-render buttons and the filter bar's
+// delegated listener. renderAll() covers every surface that shows hemisphere
+// state; the applyFilters recount is just for the toast.
+function handleHemisphereChange(hemi){
+  if (state.hemisphere === hemi) return;
+  state.hemisphere = hemi;
+  saveHemisphere();
+  renderAll();
+  const remaining = applyFilters(DATA_MAP[state.activeTab], state.activeTab).length;
+  const label = state.hemisphere === 'north' ? '北半球' : '南半球';
+  showToast(remaining === 0
+    ? '已切换到' + label + '，当前筛选条件下没有匹配的生物，可尝试重置筛选'
+    : '已切换到' + label + '，当前筛选命中 ' + remaining + ' 条');
+}
+
 function hemisphereButtons(activeClass){
   return '<button class="'+activeClass+(state.hemisphere==='north'?' active':'')+'" data-hemi="north">北半球</button>'
        + '<button class="'+activeClass+(state.hemisphere==='south'?' active':'')+'" data-hemi="south">南半球</button>';
 }
 
+// The today panel re-renders on an hourly cadence, so its hemisphere buttons
+// are (re)bound per render; filter-bar hemisphere clicks go through the
+// delegated #filterBar listener instead. Both funnel into
+// handleHemisphereChange.
 function bindHemisphereButtons(root){
   root.querySelectorAll('[data-hemi]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if (state.hemisphere === btn.dataset.hemi) return;
-      state.hemisphere = btn.dataset.hemi;
-      saveHemisphere();
-      renderAll();
-      const remaining = applyFilters(DATA_MAP[state.activeTab], state.activeTab).length;
-      const label = state.hemisphere === 'north' ? '北半球' : '南半球';
-      showToast(remaining === 0
-        ? '已切换到' + label + '，当前筛选条件下没有匹配的生物，可尝试重置筛选'
-        : '已切换到' + label + '，当前筛选命中 ' + remaining + ' 条');
-    });
+    btn.addEventListener('click', ()=>handleHemisphereChange(btn.dataset.hemi));
   });
 }
 
@@ -63,6 +148,10 @@ function bindHemisphereButtons(root){
 // mutating the objects in DATA_MAP would make data.js's shape depend on
 // app.js having run, which leaks into anything else reading that data.
 const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
+
+// Collected ids are only meaningful if they match a real creature — imports
+// are validated against this set so junk ids can't squat in storage forever.
+const KNOWN_IDS = new Set(ALL_DATA.map(x => x.item.id));
 
 // Each tab only carries the array filters its data actually has, so
 // applyFilters' tab guards and the key set stay in agreement.
@@ -93,6 +182,20 @@ function isValidFilterValue(key, v, isArray) {
   return false;
 }
 
+// Same untrusted-localStorage rule as the filters: todayGroups is only
+// adopted when it is a plain object carrying booleans under known tab keys.
+// (A stray string or array used to survive the spread in loadUIState.)
+function loadTodayGroups(saved) {
+  const g = { fish: true, bug: true, sea: true };
+  const s = saved.todayGroups;
+  if (s && typeof s === 'object' && !Array.isArray(s)) {
+    for (const t of CONFIG.TABS) {
+      if (typeof s[t] === 'boolean') g[t] = s[t];
+    }
+  }
+  return g;
+}
+
 function loadUIState() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.ui)); } catch {}
@@ -120,7 +223,7 @@ function loadUIState() {
     todayOpen: !!saved.todayOpen,
     filterOpen: !!saved.filterOpen,
     todayUncollectedOnly: !!saved.todayUncollectedOnly,
-    todayGroups: { fish: true, bug: true, sea: true, ...(saved.todayGroups || {}) }
+    todayGroups: loadTodayGroups(saved)
   };
 }
 
@@ -172,8 +275,11 @@ function exportCollected() {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+  // Date-stamped so consecutive backups stay distinguishable in Downloads.
+  const now = getLocalTime();
+  const pad = n => String(n).padStart(2, '0');
+  a.download = 'acnh-collected-' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
   a.href = url;
-  a.download = 'acnh-collected.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -181,33 +287,41 @@ function exportCollected() {
 }
 
 function importCollected(e) {
-  const file = e.target.files[0];
+  const input = e.target;
+  const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const parsed = JSON.parse(reader.result);
       const arr = Array.isArray(parsed) ? parsed : parsed.collected;
       if (!Array.isArray(arr)) throw new Error('文件格式不正确');
-      const incoming = new Set(arr);
+      // Unknown ids would sit in storage forever, never matching a row and
+      // silently inflating the imported count — drop them at the door and say
+      // so. A file with no recognizable ids at all is almost certainly not an
+      // export of this app.
+      const incoming = new Set(arr.filter(id => KNOWN_IDS.has(id)));
+      const dropped = new Set(arr).size - incoming.size;
+      if (incoming.size === 0) throw new Error('文件中没有可识别的生物记录');
       if (state.collected.size > 0) {
-        if (!confirm('导入将覆盖当前的 ' + state.collected.size + ' 条记录，是否继续？')) {
-          e.target.value = '';
+        const ok = await confirmDialog('导入将覆盖当前的 ' + state.collected.size + ' 条记录，是否继续？', '覆盖导入');
+        if (!ok) {
+          input.value = '';
           return;
         }
       }
       state.collected = incoming;
       saveCollected();
       renderAll();
-      showToast('导入成功，共 ' + state.collected.size + ' 条记录');
+      showToast('导入成功，共 ' + incoming.size + ' 条记录' + (dropped > 0 ? '（已忽略 ' + dropped + ' 条无法识别的记录）' : ''));
     } catch (err) {
       showToast('导入失败：' + err.message);
     }
-    e.target.value = '';
+    input.value = '';
   };
   reader.onerror = () => {
     showToast('导入失败：无法读取文件');
-    e.target.value = '';
+    input.value = '';
   };
   reader.readAsText(file);
 }
@@ -397,6 +511,13 @@ function renderTodayPanel() {
   bindHemisphereButtons(document.getElementById('todayPanel'));
 }
 
+// No name-search box — deliberate, not an oversight. Search was decided
+// against: the filter dimensions (location / shadow / weather / month /
+// hour / status) are the intended way to find a creature, and they compose to
+// answer the questions this page exists for ("what can I catch right now",
+// "what's still missing"). If a future change feels like it needs a search
+// box, that decision was made on purpose — don't add one without checking
+// with the project owner first.
 function renderFilters() {
   const tab = state.activeTab;
   const f = state.filters[tab];
@@ -457,9 +578,15 @@ function renderFilters() {
   }
   html += '</div></div>';
 
+  // The hour row has three non-numeric states, and they are not the same
+  // thing: 不限 = no hour filtering at all; 全天出现 = only creatures whose
+  // hours cover all 24; and the unmarked default = follow the clock. Hiding
+  // "clear" behind a re-tap of the active hour chip (the old behaviour)
+  // made none of that discoverable, so 不限 is now an explicit chip.
   html += '<div class="filter-row"><span class="filter-label">出现时间</span><div class="filter-options" id="hourGrid">';
   const curHr = getLocalTime().getHours();
-  html += '<button class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all">全天</button>';
+  html += '<button class="filter-btn'+(f.hour===null?' active':'')+'" data-filter="hour" data-value="none">不限</button>';
+  html += '<button class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all">全天出现</button>';
   for (let h = 0; h < CONFIG.HOURS; h++) {
     html += '<button class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' is-now':'')+'" data-filter="hour" data-value="'+h+'">'+h+'</button>';
   }
@@ -470,30 +597,64 @@ function renderFilters() {
   html += '</div></div>';
 
   document.getElementById('filterBar').innerHTML = html;
+}
 
-  document.getElementById('filterToggle').addEventListener('click', () => {
+// Sync every filter chip's classes against the current state, in place.
+// Filter taps and clock changes both land here — a tap only flips chip
+// classes (no innerHTML rebuild, so focus and scroll survive), and a clock
+// change additionally moves the is-now highlight on the month/hour grids.
+function syncFilterChips() {
+  const f = state.filters[state.activeTab];
+  const curMon = getLocalTime().getMonth() + 1;
+  const curHr = getLocalTime().getHours();
+  document.querySelectorAll('#filterBar [data-filter]').forEach(btn => {
+    const filter = btn.dataset.filter;
+    const value = btn.dataset.value;
+    let active = false;
+    if (filter === 'status') active = f.status === value;
+    else if (filter === 'location') active = f.location.includes(value);
+    else if (filter === 'shadowSize') active = f.shadowSize.includes(value);
+    else if (filter === 'weather') active = f.weather.includes(value);
+    else if (filter === 'month') active = f.month === parseInt(value);
+    else if (filter === 'hour') {
+      active = f.hour === (value === 'all' ? 'all' : value === 'none' ? null : parseInt(value));
+    }
+    btn.classList.toggle('active', active);
+    if (filter === 'month') {
+      btn.classList.toggle('is-now', parseInt(value) === curMon);
+    } else if (filter === 'hour') {
+      btn.classList.toggle('is-now', value !== 'all' && value !== 'none' && parseInt(value) === curHr);
+    }
+  });
+}
+
+// One delegated listener for everything clickable in the filter bar — filter
+// chips, hemisphere buttons, the mobile toggle and 重置全部 — attached once
+// at startup. #filterBar itself is persistent (only its innerHTML is
+// re-rendered), so the listener survives re-renders without stacking
+// duplicates.
+document.getElementById('filterBar').addEventListener('click', e => {
+  const hemiBtn = e.target.closest('[data-hemi]');
+  if (hemiBtn) return handleHemisphereChange(hemiBtn.dataset.hemi);
+
+  if (e.target.closest('#filterToggle')) {
     state.filterOpen = !state.filterOpen;
     saveUIState();
     renderFilters();
-  });
+    return;
+  }
 
-  bindHemisphereButtons(document.getElementById('filterBar'));
-
-  document.getElementById('filterReset').addEventListener('click', () => {
+  if (e.target.closest('#filterReset')) {
     // Resetting hands hour control back to the clock, and clears sort too —
     // the button says 重置全部, so leaving sort applied would be a lie.
     state.filters[state.activeTab] = makeFilters(state.activeTab);
     state.sort = { key: null, dir: 'asc' };
     saveUIState();
-    renderFilters();
+    syncFilterChips();
     renderList();
-  });
-}
+    return;
+  }
 
-// One delegated listener for every filter button, attached once at startup.
-// #filterBar itself is persistent (only its innerHTML is re-rendered), so the
-// listener survives re-renders without stacking duplicates.
-document.getElementById('filterBar').addEventListener('click', e => {
   const btn = e.target.closest('.filter-btn[data-filter]');
   if (!btn) return;
   const tab = state.activeTab;
@@ -506,17 +667,21 @@ document.getElementById('filterBar').addEventListener('click', e => {
   } else if (filter === 'month') {
     state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
   } else if (filter === 'hour') {
-    // Any manual hour choice (including "全天" and re-tapping to clear)
-    // marks the filter as user-owned so the hourly tick won't clobber it.
+    // Any manual hour choice (including 不限 and 全天出现) marks the filter
+    // as user-owned so the hourly tick won't clobber it. 不限 is "no hour
+    // filter", which is itself a choice — not a request to follow the clock
+    // again. Only 重置全部 hands control back to the clock.
     state.filters[tab].hourManual = true;
-    if (value === 'all') {
+    if (value === 'none') {
+      state.filters[tab].hour = null;
+    } else if (value === 'all') {
       state.filters[tab].hour = state.filters[tab].hour === 'all' ? null : 'all';
     } else {
       state.filters[tab].hour = state.filters[tab].hour === parseInt(value) ? null : parseInt(value);
     }
   }
   saveUIState();
-  renderFilters();
+  syncFilterChips();
   renderList();
 });
 
@@ -624,16 +789,17 @@ function renderList() {
   rows.replaceChildren(frag);
 }
 
-// Bulk mark/unmark only changes collected state, which is a class toggle on
-// rows already on screen — patch them in place instead of rebuilding. A rebuild
-// is only needed when rows must appear/disappear (status filter) or reorder
-// (collected sort).
+// Bulk mark/unmark acts immediately and offers 撤销 in the toast — the old
+// confirm() gate is gone. A confirm couldn't be un-clicked anyway: once
+// "确定" was tapped, up to 80 rows changed with no way back. An undo that
+// restores exactly the rows this operation touched (single toggles made in
+// between are preserved) is strictly safer.
 function bulkSetCollected(add) {
   if (lastFiltered.length === 0) return;
   const verb = add ? '标记' : '取消标记';
-  if (!confirm('确定要' + verb + '当前 ' + lastFiltered.length + ' 条生物吗？此操作无法撤销。')) return;
-  const count = lastFiltered.length;
-  lastFiltered.forEach(x => add ? state.collected.add(x.id) : state.collected.delete(x.id));
+  const before = new Set(state.collected);
+  const ids = lastFiltered.map(x => x.id);
+  ids.forEach(id => add ? state.collected.add(id) : state.collected.delete(id));
   saveCollected();
   renderProgress();
   const f = state.filters[state.activeTab];
@@ -644,7 +810,29 @@ function bulkSetCollected(add) {
       el.classList.toggle('collected', add);
     });
   }
-  showToast('已' + verb + ' ' + count + ' 条');
+  showToast('已' + verb + ' ' + ids.length + ' 条', {
+    duration: 6000,
+    action: {
+      label: '撤销',
+      onClick: () => {
+        // Only the rows this bulk operation touched are restored to their
+        // pre-op state, so a single toggle made while the toast was up
+        // survives the undo.
+        ids.forEach(id => before.has(id) ? state.collected.add(id) : state.collected.delete(id));
+        saveCollected();
+        renderProgress();
+        const f = state.filters[state.activeTab];
+        if (f.status !== 'all' || state.sort.key === 'collected') {
+          renderList();
+        } else {
+          document.querySelectorAll('#listRows .creature-item').forEach(el => {
+            el.classList.toggle('collected', state.collected.has(el.dataset.id));
+          });
+        }
+        showToast('已撤销');
+      }
+    }
+  });
 }
 
 // Delegated listener for the bulk buttons, sort headers and creature rows,
@@ -716,56 +904,52 @@ document.getElementById('navTabs').addEventListener('click', e => {
   renderAll();
 });
 
-// Update the month/hour grids in place instead of re-rendering the whole
-// filter bar, so an hour rollover can't discard focus or scroll position.
-function refreshTimeGrids() {
-  const f = state.filters[state.activeTab];
-  const curMon = getLocalTime().getMonth() + 1;
-  const curHr = getLocalTime().getHours();
-
-  const monthGrid = document.getElementById('monthGrid');
-  if (monthGrid) {
-    monthGrid.querySelectorAll('[data-filter="month"]').forEach(btn => {
-      const m = parseInt(btn.dataset.value);
-      btn.classList.toggle('active', f.month === m);
-      btn.classList.toggle('is-now', m === curMon);
-    });
-  }
-
-  const hourGrid = document.getElementById('hourGrid');
-  if (hourGrid) {
-    hourGrid.querySelectorAll('[data-filter="hour"]').forEach(btn => {
-      const v = btn.dataset.value;
-      const h = v === 'all' ? 'all' : parseInt(v);
-      btn.classList.toggle('active', f.hour === h);
-      btn.classList.toggle('is-now', h === curHr);
-    });
-  }
+// Everything clock-driven is hour-granular: the today panel filters by hour
+// and its header shows no minutes, and the hour filter follows the clock. So
+// a minute tick has nothing to update — re-rendering on it only destroyed and
+// rebound DOM for an identical result. The stamp also carries the date, so a
+// device that sleeps across a whole day (same hour, different day) still
+// counts as a change when it wakes.
+function clockStamp() {
+  const now = getLocalTime();
+  return now.getFullYear() + '-' + now.getMonth() + '-' + now.getDate() + 'T' + now.getHours();
 }
-
 // Seed from the current clock so the first interval fire is a no-op.
-let lastTickHour = getLocalTime().getHours();
-setInterval(() => {
-  const hour = getLocalTime().getHours();
-  // Everything clock-driven here is hour-granular: the today panel filters by
-  // hour and its header shows no minutes, and the hour filter follows the
-  // clock. So a minute tick has nothing to update — re-rendering on it only
-  // destroyed and rebound DOM for an identical result.
-  if (hour === lastTickHour) return;
-  lastTickHour = hour;
+let lastTickStamp = clockStamp();
 
+function onClockChange() {
+  const hour = getLocalTime().getHours();
   renderTodayPanel();
   // Follow the clock with the hour filter — but only until the user picks an
-  // hour themselves (hourManual). Their choice stays put; hitting 重置全部
+  // hour themselves (hourManual; 不限 counts as a pick too). 重置全部 is what
   // hands control back to the clock. Every tab follows, otherwise switching
   // tabs surfaces a stale hour from whenever that tab was last active.
   for (const tab of CONFIG.TABS) {
     if (!state.filters[tab].hourManual) state.filters[tab].hour = hour;
   }
   saveUIState();
-  refreshTimeGrids();
+  syncFilterChips();
   renderList();
+}
+
+setInterval(() => {
+  const stamp = clockStamp();
+  if (stamp === lastTickStamp) return;
+  lastTickStamp = stamp;
+  onClockChange();
 }, CONFIG.TICK_MS);
+
+// Background tabs get their timers throttled, so the minute tick may fire
+// late — or not at all until the tab is visible again. Re-check on visibility
+// so the page is correct the moment the user looks at it, not up to a minute
+// later.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const stamp = clockStamp();
+  if (stamp === lastTickStamp) return;
+  lastTickStamp = stamp;
+  onClockChange();
+});
 
 renderDataBar();
 renderAll();
