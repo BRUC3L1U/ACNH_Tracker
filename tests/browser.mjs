@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchBrowser } from './helpers/browser.mjs';
+import { testArtBrowser } from './art-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const browser = await launchBrowser(root);
@@ -91,4 +92,5 @@ try {
   await filePage.reload();
   assert.equal(await filePage.evaluate('document.querySelectorAll(".creature-checkbox:checked").length'), 1);
   console.log('PASS direct file opening, safe saving and reload persistence');
+  await testArtBrowser(browser);
 } finally { await browser.close(); }

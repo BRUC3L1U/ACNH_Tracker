@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
@@ -82,7 +82,17 @@ export async function launchBrowser(root) {
     }
     await send('Page.navigate', { url }, sessionId);
     await waitFor('!!document.querySelector(".creature-item")');
-    return { evaluate, waitFor, reload: async () => {
+    return { evaluate, waitFor,
+      setViewport: (width, height = 900) => send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId),
+      blockUrls: async urls => {
+        await send('Network.enable', {}, sessionId);
+        await send('Network.setBlockedURLs', { urls }, sessionId);
+      },
+      screenshot: async path => {
+        const { data } = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
+        await writeFile(path, Buffer.from(data, 'base64'));
+      },
+      reload: async () => {
       await send('Page.navigate', { url: 'about:blank' }, sessionId);
       await send('Page.navigate', { url }, sessionId);
       await waitFor('!!document.querySelector(".creature-item")');

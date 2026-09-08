@@ -16,7 +16,7 @@
   --color-danger:#E8956F;--color-shadow:rgba(0,0,0,.06);
 /* System font stack only: Google Fonts (Noto Sans SC) was removed on
    purpose: the CDN is unreliable in mainland China and every target
-   platform already ships a good CJK UI font. Zero network dependencies. */
+   platform already ships a good CJK UI font. No network font dependencies. */
   --radius-card:16px;--radius-sm:10px;--font-body:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
 }
 body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-text);min-height:100vh}
@@ -145,21 +145,63 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .heat-cell.current{border:2px solid var(--color-accent-warm);box-shadow:0 0 0 1px var(--color-accent-warm)}
 .empty-state{padding:48px;text-align:center;color:var(--color-text-muted);font-size:15px}
 @media(hover:hover){button:active,.creature-item:active{transform:translateY(1px)}}
+
+.art-overview{margin-bottom:16px;padding:18px 24px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-card);line-height:1.75}
+.art-overview h2{font-size:15px;margin-bottom:4px}
+.art-overview p{font-size:13px}
+.art-overview .art-source-note{margin-top:6px;font-size:12px;color:var(--color-text)}
+.art-overview a,.art-source-link{color:#4A7C4F;text-underline-offset:3px}
+.art-item{display:block;cursor:default}
+.art-item.collected{opacity:1}
+.art-collect{display:grid;grid-template-columns:28px 88px minmax(0,1fr);align-items:center;gap:16px;cursor:pointer}
+.art-thumbnail-frame{width:88px;height:88px;display:flex;align-items:center;justify-content:center;background:var(--color-bg);border-radius:var(--radius-sm)}
+.art-thumbnail-frame img{width:100%;height:100%;object-fit:contain}
+.art-title-group{display:flex;flex-direction:column;gap:8px;min-width:0}
+.art-title-line{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.art-item .creature-name{white-space:normal;line-height:1.5}
+.art-real-name{font-size:13px;line-height:1.6;color:var(--color-text)}
+.art-details{margin:8px 0 0 148px}
+.art-details summary{width:fit-content;max-width:100%;padding:6px 0;font-size:13px;font-weight:600;color:#4A7C4F;cursor:pointer}
+.art-detail-body{padding-top:10px}
+.art-clues{display:grid;gap:6px;font-size:13px;line-height:1.8}
+.art-clues strong{display:inline-block;margin-right:10px}
+.art-comparisons{display:flex;flex-wrap:wrap;gap:16px;margin:14px 0}
+.art-comparisons figure{flex:1 1 150px;max-width:250px;min-width:0}
+.art-comparisons figcaption{font-size:12px;font-weight:600;margin-bottom:6px}
+.art-comparison-frame{display:flex;align-items:center;justify-content:center;aspect-ratio:3/4;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden}
+.art-comparison-frame img{width:100%;height:100%;object-fit:contain}
+.art-image-error{padding:10px;font-size:12px;text-align:center;color:var(--color-text)}
+.art-source-link{font-size:12px}
+a:focus-visible,summary:focus-visible{outline:3px solid var(--color-accent-warm);outline-offset:3px}
+@media(max-width:640px){
+  .art-overview{padding:14px 16px}
+  .art-collect{grid-template-columns:28px 64px minmax(0,1fr);gap:10px}
+  .art-thumbnail-frame{width:64px;height:76px}
+  .art-title-line{gap:5px}
+  .art-title-line .tag{font-size:11px;padding:2px 7px}
+  .art-item .creature-name{flex-basis:100%}
+  .art-details{margin-left:38px}
+  .art-comparisons{gap:10px}
+  .art-comparisons figure{flex-basis:calc(50% - 5px);max-width:100%}
+  .progress-text{flex-wrap:wrap;gap:6px}
+}
+@media(hover:hover){.art-item:active{transform:none}}
 </style>
 </head>
 <body>
 
-<nav class="navbar" aria-label="生物类别">
+<nav class="navbar" aria-label="收集类别">
   <div class="nav-left">
     <span class="nav-title">ACNH Tracker</span>
   </div>
-  <div class="nav-tabs" id="navTabs" role="group" aria-label="选择生物类别"></div>
+  <div class="nav-tabs" id="navTabs" role="group" aria-label="选择收集类别"></div>
 </nav>
 
 <main class="main">
   <div class="progress-section" id="progressSection" aria-live="polite"></div>
   <div class="data-bar" id="dataBar"></div>
   <div class="today-panel" id="todayPanel"></div>
+  <section class="art-overview" id="artOverview" aria-label="艺术品收集说明" hidden></section>
   <div class="filter-bar" id="filterBar"></div>
   <div class="list-section" id="listSection"></div>
 </main>

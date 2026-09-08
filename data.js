@@ -1,4 +1,5 @@
 import { shiftMonths } from './schema.js';
+import { ART_DATA } from './art-data.js';
 
 const FISH_DATA = [
   {
@@ -1878,5 +1879,6 @@ function withDerivedHemisphere(items) {
 export const DATA_MAP = Object.freeze({
   fish: Object.freeze(withDerivedHemisphere(FISH_DATA)),
   bug: Object.freeze(withDerivedHemisphere(BUG_DATA)),
-  sea: Object.freeze(withDerivedHemisphere(SEA_DATA))
+  sea: Object.freeze(withDerivedHemisphere(SEA_DATA)),
+  art: ART_DATA
 });

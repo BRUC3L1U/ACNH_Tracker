@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build-bundle.mjs",
     "test": "node --test tests/*.test.js",
-    "check": "node scripts/build-bundle.mjs --check && node --check scripts/module-parser.mjs && node --check schema.js && node --check core.js && node --check data.js && node --check ui.js && node --check collection.js && node --check backup.js && node --check list-view.js && node --check app.js && node --check bundle.js && npm test",
+    "check": "node scripts/build-bundle.mjs --check && node --check scripts/module-parser.mjs && node --check schema.js && node --check core.js && node --check art-data.js && node --check art-view.js && node --check data.js && node --check ui.js && node --check collection.js && node --check backup.js && node --check list-view.js && node --check app.js && node --check bundle.js && npm test",
     "postinstall": "npm run check",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",

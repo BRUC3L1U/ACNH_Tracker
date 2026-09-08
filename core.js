@@ -1,4 +1,4 @@
-import { TAB_DEFINITIONS, TABS, monthsForHemisphere } from './schema.js';
+import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere } from './schema.js';
 
 export const BACKUP_VERSION = 1;
 export const MAX_IMPORT_BYTES = 64 * 1024;
@@ -38,7 +38,9 @@ const LEGACY_BUG_LOCATIONS = Object.freeze({
 export function makeFilters(tab, now = new Date()) {
   const definition = TAB_DEFINITIONS[tab];
   if (!definition) throw new Error('未知生物类别：' + tab);
-  const filters = { month: null, hour: now.getHours(), hourManual: false, status: 'all' };
+  const filters = definition.seasonal
+    ? { month: null, hour: now.getHours(), hourManual: false, status: 'all' }
+    : { status: 'all' };
   for (const key of definition.filters) filters[key] = [];
   return filters;
 }
@@ -89,13 +91,13 @@ export function normalizeUIState(saved, dataMap, now = new Date()) {
           : normalizeScalarFilter(key, candidate[key], target[key]);
       }
     }
-    if (!target.hourManual) target.hour = now.getHours();
+    if (TAB_DEFINITIONS[tab].seasonal && !target.hourManual) target.hour = now.getHours();
     filters[tab] = target;
   }
 
-  const todayGroups = Object.fromEntries(TABS.map(tab => [tab, true]));
+  const todayGroups = Object.fromEntries(CREATURE_TABS.map(tab => [tab, true]));
   if (source.todayGroups && typeof source.todayGroups === 'object' && !Array.isArray(source.todayGroups)) {
-    for (const tab of TABS) {
+    for (const tab of CREATURE_TABS) {
       if (typeof source.todayGroups[tab] === 'boolean') todayGroups[tab] = source.todayGroups[tab];
     }
   }
@@ -179,7 +181,7 @@ export function parseBackup(text, knownIds) {
 
   const incoming = new Set(values.filter(id => knownIds.has(id)));
   const dropped = new Set(values).size - incoming.size;
-  if (values.length > 0 && incoming.size === 0) throw new Error('文件中没有可识别的生物记录');
+  if (values.length > 0 && incoming.size === 0) throw new Error('文件中没有可识别的收集记录');
   return { collected: incoming, dropped, legacy };
 }
 
@@ -209,13 +211,13 @@ export function undoCollectedChanges(current, changes) {
 export function applyFilters(data, query) {
   const { filters, hemisphere, collected, sort } = query;
   let items = [...data];
-  for (const key of ['location', 'shadowSize', 'weather']) {
+  for (const key of ['location', 'shadowSize', 'weather', 'artType', 'authenticity']) {
     if (filters[key]?.length) items = items.filter(item => filters[key].includes(item[key]));
   }
-  if (filters.month !== null) {
+  if (filters.month != null) {
     items = items.filter(item => monthsForHemisphere(item, hemisphere).includes(filters.month));
   }
-  if (filters.hour !== null) {
+  if (filters.hour != null) {
     items = filters.hour === 'all'
       ? items.filter(item => item.hours.length === 24)
       : items.filter(item => item.hours.includes(filters.hour));

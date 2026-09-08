@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { DATA_MAP } from '../data.js';
-import { monthsForHemisphere, shiftMonths } from '../schema.js';
+import { CREATURE_TABS, monthsForHemisphere, shiftMonths } from '../schema.js';
 import { escapeHtml } from '../ui.js';
 import {
   applyFilters,
@@ -29,10 +29,11 @@ test('data schema and hemisphere derivation stay consistent', () => {
   assert.deepEqual(Object.fromEntries(Object.entries(DATA_MAP).map(([key, value]) => [key, value.length])), {
     fish: 80,
     bug: 80,
-    sea: 40
+    sea: 40,
+    art: 43
   });
-  assert.equal(knownIds.size, 200);
-  for (const item of all) {
+  assert.equal(knownIds.size, 243);
+  for (const item of CREATURE_TABS.flatMap(tab => DATA_MAP[tab])) {
     assert.match(item.id, /^(fish|bug|sea)_\d{3}$/);
     assert.ok(item.name);
     assert.ok(Number.isInteger(item.price) && item.price >= 0);
@@ -91,7 +92,7 @@ test('backup round-trips an empty collection', () => {
 test('backup accepts the legacy array and rejects unknown versions and oversized lists', () => {
   assert.deepEqual([...parseBackup('["fish_001"]', knownIds).collected], ['fish_001']);
   assert.throws(() => parseBackup('{"version":2,"collected":[]}', knownIds), /不支持的备份版本/);
-  assert.throws(() => parseBackup(JSON.stringify({ version: 1, collected: Array(201).fill('fish_001') }), knownIds), /数量超出上限/);
+  assert.throws(() => parseBackup(JSON.stringify({ version: 1, collected: Array(knownIds.size + 1).fill('fish_001') }), knownIds), /数量超出上限/);
   assert.throws(() => parseBackup('{"version":1,"collected":["unknown"]}', knownIds), /没有可识别/);
 });
 

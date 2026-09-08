@@ -1,6 +1,7 @@
 import { monthsForHemisphere } from './schema.js';
 import { getCollectionAccess, getTimeRangeLabel } from './core.js';
 import { escapeHtml } from './ui.js';
+import { buildArtRow } from './art-view.js';
 
 export function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
   const CONFIG = { MONTHS: 12, SORT_KEYS: sortKeys };
@@ -65,7 +66,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
   function renderListHeader(count) {
     const editDisabled = getCollectionAccess(isLoadFailed()).canEdit ? '' : ' disabled';
     let html = '';
-    CONFIG.SORT_KEYS.forEach(sk => {
+    CONFIG.SORT_KEYS.filter(sk => state.activeTab !== 'art' || sk.key !== 'price').forEach(sk => {
       const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
       const active = state.sort.key === sk.key;
       const current = active ? '，当前'+(state.sort.dir==='asc'?'升序':'降序') : '';
@@ -80,6 +81,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
 
   function renderList() {
     const canEdit = getCollectionAccess(isLoadFailed()).canEdit;
+    const focusedRowElement = document.getElementById('listRows').contains(document.activeElement) ? document.activeElement : null;
     const focusedId = document.activeElement?.classList.contains('creature-checkbox')
       ? document.activeElement.dataset.id
       : null;
@@ -93,14 +95,14 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
 
     const rows = document.getElementById('listRows');
     if (filtered.length === 0) {
-      rows.innerHTML = '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
+      rows.innerHTML = '<div class="empty-state">没有符合条件的条目，请调整筛选条件 🔍</div>';
       if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
       return;
     }
 
     const northern = state.hemisphere === 'north';
     const curMon = getLocalTime().getMonth() + 1;
-    const sig = tab + '|' + northern + '|' + curMon;
+    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon;
     if (sig !== rowCacheSig) {
       rowCache.clear();
       rowCacheSig = sig;
@@ -112,7 +114,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     for (const item of filtered) {
       let el = rowCache.get(item.id);
       if (!el) {
-        el = buildRow(item, tab, northern, curMon);
+        el = tab === 'art' ? buildArtRow(item) : buildRow(item, tab, northern, curMon);
         rowCache.set(item.id, el);
       }
       const collected = state.collected.has(item.id);
@@ -125,6 +127,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     rows.replaceChildren(frag);
     if (focusedId) rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')?.focus();
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+    else if (focusedRowElement?.isConnected) focusedRowElement.focus();
   }
 
   return { render: renderList, get filtered() { return lastFiltered; } };

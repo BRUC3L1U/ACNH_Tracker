@@ -1,9 +1,10 @@
 import { DATA_MAP } from './data.js';
-import { TAB_DEFINITIONS, TABS, monthsForHemisphere } from './schema.js';
+import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere } from './schema.js';
 import { escapeHtml, showToast } from './ui.js';
 import { createCollectionController } from './collection.js';
 import { createBackupActions } from './backup.js';
 import { createListView } from './list-view.js';
+import { renderArtOverview } from './art-view.js';
 import {
   applyFilters,
   createSafeStorage,
@@ -80,7 +81,7 @@ function bindHemisphereButtons(root){
   });
 }
 
-// A flat view over all three datasets, tagged with its source tab. The tag
+// A flat view over all collection datasets, tagged with its source tab. The tag
 // lives in a wrapper rather than being assigned onto the creature itself:
 // mutating the objects in DATA_MAP would make data.js's shape depend on
 // app.js having run, which leaks into anything else reading that data.
@@ -186,7 +187,7 @@ function filteredItems(tab) {
     filters: state.filters[tab],
     hemisphere: state.hemisphere,
     collected: state.collected,
-    sort: state.sort
+    sort: tab === 'art' && state.sort.key === 'price' ? { key: null, dir: 'asc' } : state.sort
   });
 }
 
@@ -212,15 +213,19 @@ function renderProgress() {
 }
 
 function renderTodayPanel() {
+  const showArt = state.activeTab === 'art';
+  document.getElementById('todayPanel').hidden = showArt;
+  document.getElementById('artOverview').hidden = !showArt;
+  if (showArt) return;
   const now = getLocalTime();
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  let nowAvailable = ALL_DATA.filter(x => isAvailableNow(x.item));
+  let nowAvailable = ALL_DATA.filter(x => TAB_DEFINITIONS[x.type].seasonal && isAvailableNow(x.item));
   if (state.todayUncollectedOnly) {
     nowAvailable = nowAvailable.filter(x => !state.collected.has(x.item.id));
   }
-  const byType = Object.fromEntries(CONFIG.TABS.map(type => [
+  const byType = Object.fromEntries(CREATURE_TABS.map(type => [
     type,
     nowAvailable.filter(entry => entry.type === type)
   ]));
@@ -240,7 +245,7 @@ function renderTodayPanel() {
   html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')
     + '<label class="today-toggle"><input type="checkbox" id="todayUncollected"'+(state.todayUncollectedOnly?' checked':'')+'>只看未收集</label></div>';
 
-  for (const t of CONFIG.TABS) {
+  for (const t of CREATURE_TABS) {
     const items = byType[t];
     const open = state.todayGroups[t];
     html += '<h4><button type="button" class="today-group-header'+(open?' open':'')+'" data-group="'+t+'" aria-expanded="'+open+'" aria-controls="todayGroup-'+t+'"><span class="arrow" aria-hidden="true">▶</span> '+TAB_NAMES[t]+' （'+items.length+'）</button></h4>';
@@ -311,15 +316,26 @@ function renderFilters() {
   let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel">🔍 筛选条件</button>';
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'" id="filterPanel">';
 
+  if (definition.seasonal) {
   html += '<div class="filter-row"><span class="filter-label">半球</span><div class="filter-options">';
   html += hemisphereButtons('filter-btn');
   html += '</div></div>';
+  }
 
   html += '<div class="filter-row"><span class="filter-label">收集状态</span><div class="filter-options">';
   for (const [val,label] of CONFIG.STATUS_OPTS) {
     html += '<button type="button" class="filter-btn'+(f.status===val?' active':'')+'" data-filter="status" data-value="'+val+'" aria-pressed="'+(f.status===val)+'">'+label+'</button>';
   }
   html += '</div></div>';
+
+  for (const [key, label] of [['artType', '艺术类型'], ['authenticity', '真伪情况']]) {
+    if (!definition.filters.includes(key)) continue;
+    html += '<div class="filter-row"><span class="filter-label">'+label+'</span><div class="filter-options">';
+    for (const value of getFilterOptions(DATA_MAP, tab, key)) {
+      html += '<button type="button" class="filter-btn'+(f[key].includes(value)?' active':'')+'" data-filter="'+key+'" data-value="'+value+'" aria-pressed="'+f[key].includes(value)+'">'+value+'</button>';
+    }
+    html += '</div></div>';
+  }
 
   if (definition.filters.includes('location')) {
     html += '<div class="filter-row"><span class="filter-label">出现场所</span><div class="filter-options">';
@@ -345,26 +361,29 @@ function renderFilters() {
     html += '</div></div>';
   }
 
-  html += '<div class="filter-row"><span class="filter-label">出现月份</span><div class="filter-options" id="monthGrid">';
-  const curMon = getLocalTime().getMonth() + 1;
-  for (let m = 1; m <= CONFIG.MONTHS; m++) {
-    html += '<button type="button" class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' is-now':'')+'" data-filter="month" data-value="'+m+'" aria-pressed="'+(f.month===m)+'">'+m+'</button>';
-  }
-  html += '</div></div>';
+  if (definition.seasonal) {
+    html += '<div class="filter-row"><span class="filter-label">出现月份</span><div class="filter-options" id="monthGrid">';
+    const curMon = getLocalTime().getMonth() + 1;
+    for (let m = 1; m <= CONFIG.MONTHS; m++) {
+      html += '<button type="button" class="filter-btn month-grid'+(f.month===m?' active':'')+(m===curMon?' is-now':'')+'" data-filter="month" data-value="'+m+'" aria-pressed="'+(f.month===m)+'">'+m+'</button>';
+    }
+    html += '</div></div>';
 
-  // The hour row has three non-numeric states, and they are not the same
-  // thing: 不限 = no hour filtering at all; 全天出现 = only creatures whose
-  // hours cover all 24; and the unmarked default = follow the clock. Hiding
-  // "clear" behind a re-tap of the active hour chip (the old behaviour)
-  // made none of that discoverable, so 不限 is now an explicit chip.
-  html += '<div class="filter-row"><span class="filter-label">出现时间</span><div class="filter-options" id="hourGrid">';
-  const curHr = getLocalTime().getHours();
-  html += '<button type="button" class="filter-btn'+(f.hour===null?' active':'')+'" data-filter="hour" data-value="none" aria-pressed="'+(f.hour===null)+'">不限</button>';
-  html += '<button type="button" class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all" aria-pressed="'+(f.hour==='all')+'">全天出现</button>';
-  for (let h = 0; h < CONFIG.HOURS; h++) {
-    html += '<button type="button" class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' is-now':'')+'" data-filter="hour" data-value="'+h+'" aria-pressed="'+(f.hour===h)+'">'+h+'</button>';
+    // The hour row has three non-numeric states, and they are not the same
+    // thing: 不限 = no hour filtering at all; 全天出现 = only creatures whose
+    // hours cover all 24; and the unmarked default = follow the clock. Hiding
+    // "clear" behind a re-tap of the active hour chip (the old behaviour)
+    // made none of that discoverable, so 不限 is now an explicit chip.
+    html += '<div class="filter-row"><span class="filter-label">出现时间</span><div class="filter-options" id="hourGrid">';
+    const curHr = getLocalTime().getHours();
+    html += '<button type="button" class="filter-btn'+(f.hour===null?' active':'')+'" data-filter="hour" data-value="none" aria-pressed="'+(f.hour===null)+'">不限</button>';
+    html += '<button type="button" class="filter-btn'+(f.hour==='all'?' active':'')+'" data-filter="hour" data-value="all" aria-pressed="'+(f.hour==='all')+'">全天出现</button>';
+    for (let h = 0; h < CONFIG.HOURS; h++) {
+      html += '<button type="button" class="filter-btn'+(f.hour===h?' active':'')+(h===curHr?' is-now':'')+'" data-filter="hour" data-value="'+h+'" aria-pressed="'+(f.hour===h)+'">'+h+'</button>';
+    }
+    html += '</div></div>';
+
   }
-  html += '</div></div>';
 
   html += '<div class="filter-row"><span style="flex:1"></span>';
   html += '<button type="button" class="filter-reset" id="filterReset">重置全部</button>';
@@ -386,9 +405,7 @@ function syncFilterChips() {
     const value = btn.dataset.value;
     let active = false;
     if (filter === 'status') active = f.status === value;
-    else if (filter === 'location') active = f.location.includes(value);
-    else if (filter === 'shadowSize') active = f.shadowSize.includes(value);
-    else if (filter === 'weather') active = f.weather.includes(value);
+    else if (Array.isArray(f[filter])) active = f[filter].includes(value);
     else if (filter === 'month') active = f.month === parseInt(value);
     else if (filter === 'hour') {
       active = f.hour === (value === 'all' ? 'all' : value === 'none' ? null : parseInt(value));
@@ -440,7 +457,7 @@ document.getElementById('filterBar').addEventListener('click', e => {
   const value = btn.dataset.value;
   if (filter === 'status') {
     state.filters[tab].status = value;
-  } else if (filter === 'location' || filter === 'shadowSize' || filter === 'weather') {
+  } else if (TAB_DEFINITIONS[tab].filters.includes(filter)) {
     toggleArrayFilter(filter, value);
   } else if (filter === 'month') {
     state.filters[tab].month = state.filters[tab].month === parseInt(value) ? null : parseInt(value);
@@ -578,7 +595,7 @@ function onClockChange() {
   // hour themselves (hourManual; 不限 counts as a pick too). 重置全部 is what
   // hands control back to the clock. Every tab follows, otherwise switching
   // tabs surfaces a stale hour from whenever that tab was last active.
-  for (const tab of CONFIG.TABS) {
+  for (const tab of CREATURE_TABS) {
     if (!state.filters[tab].hourManual) state.filters[tab].hour = hour;
   }
   saveUIState();
@@ -606,6 +623,7 @@ document.addEventListener('visibilitychange', () => {
   onClockChange();
 });
 
+renderArtOverview(document.getElementById('artOverview'));
 renderDataBar();
 renderAll();
 if (collection.loadFailed) showCollectionLoadWarning();
