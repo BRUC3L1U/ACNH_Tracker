@@ -85,7 +85,7 @@ try {
 
 
   const filePage = await browser.page(pathToFileURL(root + '/index.html').href);
-  assert.match(await filePage.evaluate('document.querySelector("#storageModeNote").textContent'), /HTTP/);
+  assert.equal(await filePage.evaluate('document.querySelector("#storageModeNote")'), null);
   assert.equal(await filePage.evaluate('typeof navigator.locks.request'), 'function');
   await filePage.evaluate('document.querySelector(".creature-checkbox").click()');
   await filePage.waitFor('JSON.parse(localStorage.getItem("acnh_collected") || "[]").length === 1');

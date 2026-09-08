@@ -1,15 +1,4 @@
-import { ART_DATA, ART_SOURCES } from './art-data.js';
 import { escapeHtml } from './ui.js';
-
-export function renderArtOverview(root) {
-  const paintings = ART_DATA.filter(item => item.artType === '名画').length;
-  const statues = ART_DATA.length - paintings;
-  root.innerHTML = '<h2>艺术品收集与鉴伪</h2>'
-    + '<p>'+paintings+' 幅名画 · '+statues+' 件雕塑。勾选已收集的真品，赝品不计入进度，也无法捐赠给博物馆。</p>'
-    + '<p class="art-source-note">资料与图片：<a href="'+ART_SOURCES.catalogue+'" target="_blank" rel="noopener noreferrer">BWIKI 图鉴</a>、'
-    + '<a href="'+ART_SOURCES.comparison+'" target="_blank" rel="noopener noreferrer">鉴伪对照</a>；说明参照 '
-    + '<a href="'+ART_SOURCES.official+'" target="_blank" rel="noopener noreferrer">官方攻略</a>核对。图片需联网，文字和收集记录可离线使用。</p>';
-}
 
 function artImage(url, alt, className) {
   const frame = document.createElement('span');

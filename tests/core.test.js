@@ -8,7 +8,6 @@ import {
   applyFilters,
   createSafeStorage,
   getCollectionAccess,
-  getStorageModeNotice,
   getTimeRangeLabel,
   normalizeUIState,
   parseBackup,
@@ -135,11 +134,6 @@ test('time ranges handle midnight wrapping and empty data', () => {
   assert.equal(getTimeRangeLabel([0, 1, 2, 21, 22, 23]), '21:00–次日03:00');
   assert.equal(getTimeRangeLabel([21, 22, 23, 0, 1, 2]), '21:00–次日03:00');
   assert.equal(getTimeRangeLabel([]), '未知');
-});
-
-test('file mode explains that browser storage is origin-specific', () => {
-  assert.match(getStorageModeNotice('file:'), /HTTP.*不同.*存储/);
-  assert.equal(getStorageModeNotice('http:'), '');
 });
 
 test('time labels use exclusive end boundaries for full hours', () => {

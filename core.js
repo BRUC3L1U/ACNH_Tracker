@@ -271,9 +271,3 @@ export function getTimeRangeLabel(hours) {
     return clock(range.start) + '–' + (nextDay ? '次日' : '') + clock(end);
   }).join(' / ');
 }
-
-export function getStorageModeNotice(protocol) {
-  return protocol === 'file:'
-    ? '提示：直接打开与 HTTP 服务使用不同的浏览器存储；如曾通过 HTTP 使用，请先在旧页面导出，再到这里导入。'
-    : '';
-}

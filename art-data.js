@@ -2,12 +2,6 @@
 // Identification notes checked against Future Press's official companion guide.
 // See README data sources for scope and the corrected Moving Painting clue.
 // IDs are permanent collection keys; adding or reordering entries must not change them.
-export const ART_SOURCES = Object.freeze({
-  catalogue: 'https://wiki.biligame.com/dongsen/艺术品图鉴',
-  comparison: 'https://wiki.biligame.com/dongsen/艺术品鉴伪',
-  official: 'https://www.future-press.com/acnh/pdf/ACNH_April-Update_EN.pdf'
-});
-
 const ART_ITEMS = [
   {
     "id": "art_001",

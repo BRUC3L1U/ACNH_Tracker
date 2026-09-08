@@ -4,13 +4,11 @@ import { escapeHtml, showToast } from './ui.js';
 import { createCollectionController } from './collection.js';
 import { createBackupActions } from './backup.js';
 import { createListView } from './list-view.js';
-import { renderArtOverview } from './art-view.js';
 import {
   applyFilters,
   createSafeStorage,
   getCollectionAccess,
   getFilterOptions,
-  getStorageModeNotice,
   getTimeRangeLabel,
   makeFilters,
   normalizeUIState
@@ -215,7 +213,6 @@ function renderProgress() {
 function renderTodayPanel() {
   const showArt = state.activeTab === 'art';
   document.getElementById('todayPanel').hidden = showArt;
-  document.getElementById('artOverview').hidden = !showArt;
   if (showArt) return;
   const now = getLocalTime();
   const hour = now.getHours();
@@ -549,11 +546,8 @@ function renderAll() {
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
   const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
-  const notices = [getStorageModeNotice(window.location.protocol)];
-  if (!access.canExport) {
-    notices.push('未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。');
-  }
-  const notice = notices.filter(Boolean).join(' ');
+  const notice = access.canExport ? ''
+    : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
   document.getElementById('dataBar').innerHTML =
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
@@ -623,7 +617,6 @@ document.addEventListener('visibilitychange', () => {
   onClockChange();
 });
 
-renderArtOverview(document.getElementById('artOverview'));
 renderDataBar();
 renderAll();
 if (collection.loadFailed) showCollectionLoadWarning();

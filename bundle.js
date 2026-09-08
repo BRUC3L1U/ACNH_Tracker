@@ -25,12 +25,6 @@ function monthsForHemisphere(item, hemisphere) {
 // Identification notes checked against Future Press's official companion guide.
 // See README data sources for scope and the corrected Moving Painting clue.
 // IDs are permanent collection keys; adding or reordering entries must not change them.
-const ART_SOURCES = Object.freeze({
-  catalogue: 'https://wiki.biligame.com/dongsen/艺术品图鉴',
-  comparison: 'https://wiki.biligame.com/dongsen/艺术品鉴伪',
-  official: 'https://www.future-press.com/acnh/pdf/ACNH_April-Update_EN.pdf'
-});
-
 const ART_ITEMS = [
   {
     "id": "art_001",
@@ -3350,12 +3344,6 @@ function getTimeRangeLabel(hours) {
   }).join(' / ');
 }
 
-function getStorageModeNotice(protocol) {
-  return protocol === 'file:'
-    ? '提示：直接打开与 HTTP 服务使用不同的浏览器存储；如曾通过 HTTP 使用，请先在旧页面导出，再到这里导入。'
-    : '';
-}
-
 // Source: collection.js
 // All collection writers share one origin-scoped lock. Read inside the lock,
 // then apply the user's operation to that fresh snapshot, never to a stale tab.
@@ -3502,16 +3490,6 @@ function createBackupActions(collection, knownIds) {
 }
 
 // Source: art-view.js
-function renderArtOverview(root) {
-  const paintings = ART_DATA.filter(item => item.artType === '名画').length;
-  const statues = ART_DATA.length - paintings;
-  root.innerHTML = '<h2>艺术品收集与鉴伪</h2>'
-    + '<p>'+paintings+' 幅名画 · '+statues+' 件雕塑。勾选已收集的真品，赝品不计入进度，也无法捐赠给博物馆。</p>'
-    + '<p class="art-source-note">资料与图片：<a href="'+ART_SOURCES.catalogue+'" target="_blank" rel="noopener noreferrer">BWIKI 图鉴</a>、'
-    + '<a href="'+ART_SOURCES.comparison+'" target="_blank" rel="noopener noreferrer">鉴伪对照</a>；说明参照 '
-    + '<a href="'+ART_SOURCES.official+'" target="_blank" rel="noopener noreferrer">官方攻略</a>核对。图片需联网，文字和收集记录可离线使用。</p>';
-}
-
 function artImage(url, alt, className) {
   const frame = document.createElement('span');
   frame.className = className;
@@ -3920,7 +3898,6 @@ function renderProgress() {
 function renderTodayPanel() {
   const showArt = state.activeTab === 'art';
   document.getElementById('todayPanel').hidden = showArt;
-  document.getElementById('artOverview').hidden = !showArt;
   if (showArt) return;
   const now = getLocalTime();
   const hour = now.getHours();
@@ -4254,11 +4231,8 @@ function renderAll() {
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
   const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
-  const notices = [getStorageModeNotice(window.location.protocol)];
-  if (!access.canExport) {
-    notices.push('未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。');
-  }
-  const notice = notices.filter(Boolean).join(' ');
+  const notice = access.canExport ? ''
+    : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
   document.getElementById('dataBar').innerHTML =
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
@@ -4328,7 +4302,6 @@ document.addEventListener('visibilitychange', () => {
   onClockChange();
 });
 
-renderArtOverview(document.getElementById('artOverview'));
 renderDataBar();
 renderAll();
 if (collection.loadFailed) showCollectionLoadWarning();
