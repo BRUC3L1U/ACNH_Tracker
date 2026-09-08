@@ -25,7 +25,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
 
   function buildRow(item, tab, northern, curMon) {
     let html = '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'">'
-      + '<span class="check-box" aria-hidden="true"></span><span class="creature-main">';
+      + '<span class="check-box" aria-hidden="true"></span><span class="creature-thumbnail"></span><span class="creature-main">';
     html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
     // Sea creatures are all 海洋底部: a tag that never varies is pure noise.
     if (tab !== 'sea') {
@@ -60,6 +60,21 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     el.className = 'creature-item';
     el.dataset.id = item.id;
     el.innerHTML = html;
+    const image = document.createElement('img');
+    image.alt = item.name;
+    image.width = 64;
+    image.height = 64;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.referrerPolicy = 'no-referrer';
+    image.addEventListener('error', () => {
+      const fallback = document.createElement('span');
+      fallback.className = 'creature-image-error';
+      fallback.textContent = '图片暂不可用';
+      el.querySelector('.creature-thumbnail').replaceChildren(fallback);
+    }, { once: true });
+    image.src = item.image;
+    el.querySelector('.creature-thumbnail').appendChild(image);
     return el;
   }
 
