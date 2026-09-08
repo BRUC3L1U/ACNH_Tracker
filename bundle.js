@@ -2267,15 +2267,292 @@ function getTimeRangeLabel(hours) {
     ranges.pop();
     ranges.unshift({ start: last.start, end: head.end });
   }
-  return ranges.map(range => range.start === range.end
-    ? range.start + '时'
-    : range.start + '-' + range.end + '时').join(' / ');
+  const clock = hour => String(hour % 24).padStart(2, '0') + ':00';
+  return ranges.map(range => {
+    const end = range.end + 1;
+    const nextDay = end >= 24 || end <= range.start;
+    return clock(range.start) + '–' + (nextDay ? '次日' : '') + clock(end);
+  }).join(' / ');
 }
 
 function getStorageModeNotice(protocol) {
   return protocol === 'file:'
     ? '提示：直接打开与 HTTP 服务使用不同的浏览器存储；如曾通过 HTTP 使用，请先在旧页面导出，再到这里导入。'
     : '';
+}
+
+// Source: collection.js
+// All collection writers share one origin-scoped lock. Read inside the lock,
+// then apply the user's operation to that fresh snapshot, never to a stale tab.
+function createCollectionController({ storage, key, knownIds, locks, readLegacy, clearLegacy, onChange, onError }) {
+  let collected = new Set();
+  let loadFailed = false;
+  let snapshot = null;
+  let error = null;
+
+  function read() {
+    const result = storage.getItem(key);
+    if (!result.ok) throw result.error;
+    const raw = result.value;
+    if (raw === null) return { raw, collected: normalizeCollected(readLegacy?.(), knownIds) };
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every(id => typeof id === 'string')) {
+      throw new Error('浏览器中的收集记录格式损坏');
+    }
+    return { raw, collected: normalizeCollected(parsed, knownIds) };
+  }
+
+  function refresh(notify = true) {
+    const previousSnapshot = snapshot;
+    const previouslyFailed = loadFailed;
+    try {
+      const latest = read();
+      snapshot = latest.raw;
+      collected = latest.collected;
+      loadFailed = false;
+      error = null;
+    } catch (cause) {
+      const result = storage.getItem(key);
+      snapshot = result.ok ? result.value : null;
+      loadFailed = true;
+      error = cause;
+    }
+    if (notify && (snapshot !== previousSnapshot || loadFailed !== previouslyFailed)) onChange();
+  }
+
+  async function transact(operation, expected) {
+    try {
+      if (!locks?.request) throw new Error('当前浏览器不支持安全保存，请使用新版 Edge、Chrome 或 Safari，并通过 HTTPS、本地服务或直接打开文件使用');
+      return await locks.request(key + ':write', () => {
+        let latest;
+        if (expected !== undefined) {
+          const result = storage.getItem(key);
+          if (!result.ok) throw result.error;
+          if (result.value !== expected) {
+            refresh();
+            onError('其他页面已修改收集记录，请重新导入并确认');
+            return { ok: false, conflict: true };
+          }
+          // Recovery imports can replace malformed storage after confirmation.
+          latest = new Set();
+        } else {
+          latest = read().collected;
+        }
+        const result = operation(latest);
+        const raw = JSON.stringify([...result.next]);
+        const saved = storage.setItem(key, raw);
+        if (!saved.ok) throw saved.error;
+        collected = result.next;
+        snapshot = raw;
+        loadFailed = false;
+        error = null;
+        try { clearLegacy?.(); } catch {}
+        onChange();
+        return { ...result, ok: true };
+      });
+    } catch (cause) {
+      refresh(false);
+      onChange();
+      onError(cause.message || '浏览器阻止了本地存储，当前更改无法保存');
+      return { ok: false };
+    }
+  }
+
+  refresh(false);
+  return {
+    get collected() { return collected; },
+    get loadFailed() { return loadFailed; },
+    get snapshot() { return snapshot; },
+    get error() { return error; },
+    refresh,
+    set(ids, add) { return transact(current => setCollectedForIds(current, ids, add)); },
+    undo(changes) { return transact(current => undoCollectedChanges(current, changes)); },
+    replace(incoming, expected) { return transact(() => ({ next: new Set(incoming) }), expected); }
+  };
+}
+
+// Source: backup.js
+function createBackupActions(collection, knownIds) {
+  let importInProgress = false;
+
+  function exportCollected() {
+    collection.refresh();
+    if (!getCollectionAccess(collection.loadFailed).canExport) {
+      showToast('未能加载已有收集记录，已暂停导出；可导入有效备份恢复');
+      return;
+    }
+    const blob = new Blob([serializeBackup(collection.collected)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    a.download = 'acnh-collected-' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function importCollected(event) {
+    const input = event.target;
+    const file = input.files[0];
+    if (!file || importInProgress) return;
+    importInProgress = true;
+    document.getElementById('importBtn').disabled = true;
+    try {
+      validateImportFileSize(file.size);
+      const { collected: incoming, dropped } = parseBackup(await file.text(), knownIds);
+      collection.refresh();
+      const expected = collection.snapshot;
+      if (collection.collected.size > 0 || collection.loadFailed) {
+        const message = collection.loadFailed
+          ? '已有记录无法读取，导入将覆盖浏览器中的记录，是否继续？'
+          : '导入将覆盖当前的 ' + collection.collected.size + ' 条记录，是否继续？';
+        if (!await confirmDialog(message, '覆盖导入')) return;
+      }
+      if ((await collection.replace(incoming, expected)).ok) {
+        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (dropped > 0 ? '（已忽略 ' + dropped + ' 条无法识别的记录）' : ''));
+      }
+    } catch (error) {
+      showToast('导入失败：' + error.message);
+    } finally {
+      importInProgress = false;
+      document.getElementById('importBtn').disabled = false;
+      input.value = '';
+    }
+  }
+
+  return { exportCollected, importCollected, get importInProgress() { return importInProgress; } };
+}
+
+// Source: list-view.js
+function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
+  const CONFIG = { MONTHS: 12, SORT_KEYS: sortKeys };
+  const getLocalTime = () => new Date();
+  // Header and rows live in their own persistent containers so a re-render can
+  // replace one without destroying the other.
+  document.getElementById('listSection').innerHTML =
+    '<div class="list-header" id="listHeader"></div><div id="listRows"></div>';
+
+  // Row elements are cached by creature id and reused across renders. Rebuilding
+  // #listSection wholesale meant parsing ~69KB of HTML and constructing every
+  // element again for each filter tap; now a re-render only re-orders nodes that
+  // already exist. What a row's markup bakes in: the tab, the hemisphere's
+  // months, the current-month highlight, is tracked in rowCacheSig, and any
+  // change there invalidates the whole cache.
+  const rowCache = new Map();
+  let rowCacheSig = '';
+  // The bulk buttons act on whatever the last render filtered down to, and they
+  // are bound once via delegation rather than re-bound per render.
+  let lastFiltered = [];
+
+  function buildRow(item, tab, northern, curMon) {
+    let html = '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'">'
+      + '<span class="check-box" aria-hidden="true"></span><span class="creature-main">';
+    html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
+    // Sea creatures are all 海洋底部: a tag that never varies is pure noise.
+    if (tab !== 'sea') {
+      html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
+    }
+    if (item.shadowSize) {
+      html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
+    }
+    // Weather is filterable on the bug tab, so it has to be visible on the row:
+    // otherwise a user who filters by 雨天 can't tell why a given row matched.
+    if (item.weather && item.weather !== '无限制') {
+      html += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
+    }
+    html += '<span class="tag-price">'+item.price+' 铃钱</span>';
+    // Capture notes are prose, not a filter dimension; rendered as plain text so
+    // they read differently from the tags beside them.
+    if (item.note) {
+      html += '<span class="note">'+escapeHtml(item.note)+'</span>';
+    }
+    html += '</span><span class="creature-meta"><span class="meta-row"><span class="meta-label">月:</span>';
+    const months = monthsForHemisphere(item, northern ? 'north' : 'south');
+    for (let m = 1; m <= CONFIG.MONTHS; m++) {
+      html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
+    }
+    // Hour availability as a text range rather than 24 cells per row: the 24-cell
+    // grid was ~4800 elements for an 80-row list and dominated both the HTML
+    // payload and layout cost.
+    html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
+      + getTimeRangeLabel(item.hours) + '</span></span></span>';
+
+    const el = document.createElement('label');
+    el.className = 'creature-item';
+    el.dataset.id = item.id;
+    el.innerHTML = html;
+    return el;
+  }
+
+  function renderListHeader(count) {
+    const editDisabled = getCollectionAccess(isLoadFailed()).canEdit ? '' : ' disabled';
+    let html = '';
+    CONFIG.SORT_KEYS.forEach(sk => {
+      const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
+      const active = state.sort.key === sk.key;
+      const current = active ? '，当前'+(state.sort.dir==='asc'?'升序':'降序') : '';
+      html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
+    });
+    html += '<span style="flex:1"></span>';
+    html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+count+' 条</span>';
+    html += '<button type="button" class="data-btn" id="markAllVisible" style="margin-left:8px;padding:4px 12px;font-size:12px"'+editDisabled+'>全标</button>';
+    html += '<button type="button" class="data-btn" id="unmarkAllVisible" style="padding:4px 12px;font-size:12px"'+editDisabled+'>全取消</button>';
+    document.getElementById('listHeader').innerHTML = html;
+  }
+
+  function renderList() {
+    const canEdit = getCollectionAccess(isLoadFailed()).canEdit;
+    const focusedId = document.activeElement?.classList.contains('creature-checkbox')
+      ? document.activeElement.dataset.id
+      : null;
+    const focusedSort = document.activeElement?.classList.contains('sort-btn')
+      ? document.activeElement.dataset.sort
+      : null;
+    const tab = state.activeTab;
+    const filtered = filteredItems(tab);
+    lastFiltered = filtered;
+    renderListHeader(filtered.length);
+
+    const rows = document.getElementById('listRows');
+    if (filtered.length === 0) {
+      rows.innerHTML = '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
+      if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+      return;
+    }
+
+    const northern = state.hemisphere === 'north';
+    const curMon = getLocalTime().getMonth() + 1;
+    const sig = tab + '|' + northern + '|' + curMon;
+    if (sig !== rowCacheSig) {
+      rowCache.clear();
+      rowCacheSig = sig;
+    }
+
+    // Appending an existing node to the fragment detaches it from the old list,
+    // so reorders and removals fall out of rebuilding this in filtered order.
+    const frag = document.createDocumentFragment();
+    for (const item of filtered) {
+      let el = rowCache.get(item.id);
+      if (!el) {
+        el = buildRow(item, tab, northern, curMon);
+        rowCache.set(item.id, el);
+      }
+      const collected = state.collected.has(item.id);
+      el.classList.toggle('collected', collected);
+      const checkbox = el.querySelector('.creature-checkbox');
+      checkbox.checked = collected;
+      checkbox.disabled = !canEdit;
+      frag.appendChild(el);
+    }
+    rows.replaceChildren(frag);
+    if (focusedId) rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')?.focus();
+    else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+  }
+
+  return { render: renderList, get filtered() { return lastFiltered; } };
 }
 
 // Source: app.js
@@ -2292,7 +2569,6 @@ const CONFIG = {
 };
 
 let storageAccessError = null;
-let collectionLoadFailed = false;
 let nativeStorage;
 try {
   nativeStorage = window.localStorage;
@@ -2355,6 +2631,33 @@ const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type,
 // are validated against this set so junk ids can't squat in storage forever.
 const KNOWN_IDS = new Set(ALL_DATA.map(x => x.item.id));
 
+const collection = createCollectionController({
+  storage,
+  key: CONFIG.STORAGE_KEYS.collected,
+  knownIds: KNOWN_IDS,
+  locks: navigator.locks,
+  readLegacy() {
+    try {
+      const cookie = document.cookie.split(';').find(c => c.trim().startsWith('acnh_collected='));
+      return cookie ? JSON.parse(decodeURIComponent(cookie.split('=').slice(1).join('='))) : [];
+    } catch { return []; }
+  },
+  clearLegacy() {
+    document.cookie = 'acnh_collected=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax';
+  },
+  onChange() {
+    renderCollectionViews();
+    renderDataBar();
+  },
+  onError(message) { showToast(message, { duration: 6000 }); }
+});
+const backup = createBackupActions(collection, KNOWN_IDS);
+window.addEventListener('storage', event => {
+  if (event.storageArea === nativeStorage && (event.key === CONFIG.STORAGE_KEYS.collected || event.key === null)) {
+    collection.refresh();
+  }
+});
+
 function loadUIState() {
   const result = storage.getItem(CONFIG.STORAGE_KEYS.ui);
   if (!result.ok) storageAccessError ||= result.error;
@@ -2372,7 +2675,7 @@ function loadHemisphere() {
 const state = {
   ...loadUIState(),
   hemisphere: loadHemisphere(),
-  collected: loadCollected(),
+  get collected() { return collection.collected; },
 };
 
 function saveUIState() {
@@ -2389,46 +2692,6 @@ function saveUIState() {
   return result.ok;
 }
 
-function loadCollected() {
-  const result = storage.getItem(CONFIG.STORAGE_KEYS.collected);
-  let readError = result.ok ? null : result.error;
-  if (result.value) {
-    try {
-      const parsed = JSON.parse(result.value);
-      if (!Array.isArray(parsed)) throw new Error('invalid collection shape');
-      return normalizeCollected(parsed, KNOWN_IDS);
-    } catch {
-      readError = new Error('浏览器中的收集记录格式损坏');
-    }
-  }
-  // Migrate from the legacy cookie (one-time), then clear it.
-  let legacyCookie = '';
-  try { legacyCookie = document.cookie; } catch {}
-  const m = legacyCookie.split(';').find(c => c.trim().startsWith('acnh_collected='));
-  if (m) {
-    try {
-      const arr = JSON.parse(decodeURIComponent(m.split('=').slice(1).join('=')));
-      const set = normalizeCollected(arr, KNOWN_IDS);
-      const saved = storage.setItem(CONFIG.STORAGE_KEYS.collected, JSON.stringify([...set]));
-      if (saved.ok) {
-        document.cookie = 'acnh_collected=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax';
-      } else {
-        storageAccessError ||= saved.error;
-      }
-      return set;
-    } catch {}
-  }
-  if (readError) {
-    collectionLoadFailed = true;
-    storageAccessError ||= readError;
-  }
-  return new Set();
-}
-
-function saveCollected(next) {
-  return storage.setItem(CONFIG.STORAGE_KEYS.collected, JSON.stringify([...next]));
-}
-
 function showStorageWarning() {
   showToast('浏览器阻止了本地存储，当前更改无法可靠保存', { duration: 6000 });
 }
@@ -2441,85 +2704,6 @@ function renderCollectionViews() {
   renderProgress();
   renderTodayPanel();
   renderList();
-}
-
-function commitCollected(next, options = {}) {
-  if (!getCollectionAccess(collectionLoadFailed).canEdit && !options.allowRecovery) {
-    showCollectionLoadWarning();
-    return false;
-  }
-  const result = saveCollected(next);
-  if (!result.ok) {
-    showStorageWarning();
-    return false;
-  }
-  const recovered = collectionLoadFailed;
-  collectionLoadFailed = false;
-  state.collected = next;
-  renderCollectionViews();
-  if (recovered) renderDataBar();
-  return true;
-}
-
-function exportCollected() {
-  if (!getCollectionAccess(collectionLoadFailed).canExport) {
-    showCollectionLoadWarning();
-    return;
-  }
-  const blob = new Blob([serializeBackup(state.collected)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  // Date-stamped so consecutive backups stay distinguishable in Downloads.
-  const now = getLocalTime();
-  const pad = n => String(n).padStart(2, '0');
-  a.download = 'acnh-collected-' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '.json';
-  a.href = url;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-let importInProgress = false;
-function importCollected(e) {
-  const input = e.target;
-  const file = input.files[0];
-  if (!file || importInProgress) return;
-  try {
-    validateImportFileSize(file.size);
-  } catch (error) {
-    showToast('导入失败：' + error.message);
-    input.value = '';
-    return;
-  }
-  importInProgress = true;
-  document.getElementById('importBtn').disabled = true;
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const { collected: incoming, dropped } = parseBackup(reader.result, KNOWN_IDS);
-      if (state.collected.size > 0) {
-        const ok = await confirmDialog('导入将覆盖当前的 ' + state.collected.size + ' 条记录，是否继续？', '覆盖导入');
-        if (!ok) return;
-      }
-      if (commitCollected(incoming, { allowRecovery: true })) {
-        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (dropped > 0 ? '（已忽略 ' + dropped + ' 条无法识别的记录）' : ''));
-      }
-    } catch (err) {
-      showToast('导入失败：' + err.message);
-    } finally {
-      importInProgress = false;
-      document.getElementById('importBtn').disabled = false;
-      input.value = '';
-    }
-  };
-  reader.onerror = () => {
-    showToast('导入失败：无法读取文件');
-    importInProgress = false;
-    document.getElementById('importBtn').disabled = false;
-    input.value = '';
-  };
-  reader.readAsText(file);
 }
 
 function saveHemisphere(next) {
@@ -2538,10 +2722,6 @@ function isAvailableNow(item) {
   return months.includes(month) && item.hours.includes(hour);
 }
 
-// Hours arrive sorted 0..23, so a window spanning midnight shows up as two
-// separate runs (e.g. [0..4, 21..23]). Splitting them into "0-4时 / 21-23时"
-// misreads as two windows, so the head and tail runs are merged back into the
-// single wrapping range they represent: "21-4时".
 function filteredItems(tab) {
   return applyFilters(DATA_MAP[tab], {
     filters: state.filters[tab],
@@ -2824,148 +3004,29 @@ document.getElementById('filterBar').addEventListener('click', e => {
   renderList();
 });
 
-// Header and rows live in their own persistent containers so a re-render can
-// replace one without destroying the other.
-document.getElementById('listSection').innerHTML =
-  '<div class="list-header" id="listHeader"></div><div id="listRows"></div>';
-
-// Row elements are cached by creature id and reused across renders. Rebuilding
-// #listSection wholesale meant parsing ~69KB of HTML and constructing every
-// element again for each filter tap; now a re-render only re-orders nodes that
-// already exist. What a row's markup bakes in: the tab, the hemisphere's
-// months, the current-month highlight, is tracked in rowCacheSig, and any
-// change there invalidates the whole cache.
-const rowCache = new Map();
-let rowCacheSig = '';
-// The bulk buttons act on whatever the last render filtered down to, and they
-// are bound once via delegation rather than re-bound per render.
-let lastFiltered = [];
-
-function buildRow(item, tab, northern, curMon) {
-  let html = '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'">'
-    + '<span class="check-box" aria-hidden="true"></span><span class="creature-main">';
-  html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
-  // Sea creatures are all 海洋底部: a tag that never varies is pure noise.
-  if (tab !== 'sea') {
-    html += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
-  }
-  if (item.shadowSize) {
-    html += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
-  }
-  // Weather is filterable on the bug tab, so it has to be visible on the row:
-  // otherwise a user who filters by 雨天 can't tell why a given row matched.
-  if (item.weather && item.weather !== '无限制') {
-    html += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
-  }
-  html += '<span class="tag-price">'+item.price+' 铃钱</span>';
-  // Capture notes are prose, not a filter dimension; rendered as plain text so
-  // they read differently from the tags beside them.
-  if (item.note) {
-    html += '<span class="note">'+escapeHtml(item.note)+'</span>';
-  }
-  html += '</span><span class="creature-meta"><span class="meta-row"><span class="meta-label">月:</span>';
-  const months = monthsForHemisphere(item, northern ? 'north' : 'south');
-  for (let m = 1; m <= CONFIG.MONTHS; m++) {
-    html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
-  }
-  // Hour availability as a text range rather than 24 cells per row: the 24-cell
-  // grid was ~4800 elements for an 80-row list and dominated both the HTML
-  // payload and layout cost.
-  html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-    + getTimeRangeLabel(item.hours) + '</span></span></span>';
-
-  const el = document.createElement('label');
-  el.className = 'creature-item';
-  el.dataset.id = item.id;
-  el.innerHTML = html;
-  return el;
-}
-
-function renderListHeader(count) {
-  const editDisabled = getCollectionAccess(collectionLoadFailed).canEdit ? '' : ' disabled';
-  let html = '';
-  CONFIG.SORT_KEYS.forEach(sk => {
-    const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
-    const active = state.sort.key === sk.key;
-    const current = active ? '，当前'+(state.sort.dir==='asc'?'升序':'降序') : '';
-    html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
-  });
-  html += '<span style="flex:1"></span>';
-  html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+count+' 条</span>';
-  html += '<button type="button" class="data-btn" id="markAllVisible" style="margin-left:8px;padding:4px 12px;font-size:12px"'+editDisabled+'>全标</button>';
-  html += '<button type="button" class="data-btn" id="unmarkAllVisible" style="padding:4px 12px;font-size:12px"'+editDisabled+'>全取消</button>';
-  document.getElementById('listHeader').innerHTML = html;
-}
-
-function renderList() {
-  const canEdit = getCollectionAccess(collectionLoadFailed).canEdit;
-  const focusedId = document.activeElement?.classList.contains('creature-checkbox')
-    ? document.activeElement.dataset.id
-    : null;
-  const focusedSort = document.activeElement?.classList.contains('sort-btn')
-    ? document.activeElement.dataset.sort
-    : null;
-  const tab = state.activeTab;
-  const filtered = filteredItems(tab);
-  lastFiltered = filtered;
-  renderListHeader(filtered.length);
-
-  const rows = document.getElementById('listRows');
-  if (filtered.length === 0) {
-    rows.innerHTML = '<div class="empty-state">没有符合条件的生物，请调整筛选条件 🔍</div>';
-    if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-    return;
-  }
-
-  const northern = state.hemisphere === 'north';
-  const curMon = getLocalTime().getMonth() + 1;
-  const sig = tab + '|' + northern + '|' + curMon;
-  if (sig !== rowCacheSig) {
-    rowCache.clear();
-    rowCacheSig = sig;
-  }
-
-  // Appending an existing node to the fragment detaches it from the old list,
-  // so reorders and removals fall out of rebuilding this in filtered order.
-  const frag = document.createDocumentFragment();
-  for (const item of filtered) {
-    let el = rowCache.get(item.id);
-    if (!el) {
-      el = buildRow(item, tab, northern, curMon);
-      rowCache.set(item.id, el);
-    }
-    const collected = state.collected.has(item.id);
-    el.classList.toggle('collected', collected);
-    const checkbox = el.querySelector('.creature-checkbox');
-    checkbox.checked = collected;
-    checkbox.disabled = !canEdit;
-    frag.appendChild(el);
-  }
-  rows.replaceChildren(frag);
-  if (focusedId) rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')?.focus();
-  else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-}
+const listView = createListView({
+  state, filteredItems, isLoadFailed: () => collection.loadFailed, sortKeys: CONFIG.SORT_KEYS
+});
+function renderList() { listView.render(); }
 
 // Bulk actions record only ids whose state actually changed. Undo restores an
 // id only while it still has the bulk result, so a later single-row edit wins.
-function bulkSetCollected(add) {
-  if (lastFiltered.length === 0) return;
+async function bulkSetCollected(add) {
+  if (listView.filtered.length === 0) return;
   const verb = add ? '标记' : '取消标记';
-  const ids = lastFiltered.map(x => x.id);
-  const { next, changes } = setCollectedForIds(state.collected, ids, add);
-  if (changes.length === 0) {
+  const result = await collection.set(listView.filtered.map(x => x.id), add);
+  if (!result.ok) return;
+  if (result.changes.length === 0) {
     showToast(add ? '当前条目均已标记' : '当前条目均未标记');
     return;
   }
-  if (!commitCollected(next)) return;
-  showToast('已' + verb + ' ' + changes.length + ' 条', {
+  showToast('已' + verb + ' ' + result.changes.length + ' 条', {
     duration: 6000,
     action: {
       label: '撤销',
-      onClick: () => {
-        const undo = undoCollectedChanges(state.collected, changes);
-        if (undo.restored > 0 && commitCollected(undo.next)) showToast('已撤销');
-        else if (undo.restored === 0) showToast('没有可撤销的条目');
+      onClick: async () => {
+        const undo = await collection.undo(result.changes);
+        if (undo.ok) showToast(undo.restored > 0 ? '已撤销' : '没有可撤销的条目');
       }
     }
   });
@@ -2994,11 +3055,11 @@ document.getElementById('listSection').addEventListener('click', e => {
 
 });
 
-document.getElementById('listSection').addEventListener('change', e => {
+document.getElementById('listSection').addEventListener('change', async e => {
   const input = e.target.closest('.creature-checkbox');
   if (!input) return;
-  const { next } = setCollectedForIds(state.collected, [input.dataset.id], input.checked);
-  if (!commitCollected(next)) input.checked = !input.checked;
+  const add = input.checked;
+  await collection.set([input.dataset.id], add);
 });
 
 function renderAll() {
@@ -3010,7 +3071,8 @@ function renderAll() {
 }
 
 function renderDataBar() {
-  const access = getCollectionAccess(collectionLoadFailed);
+  const access = getCollectionAccess(collection.loadFailed);
+  const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
   const notices = [getStorageModeNotice(window.location.protocol)];
   if (!access.canExport) {
     notices.push('未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。');
@@ -3019,11 +3081,12 @@ function renderDataBar() {
   document.getElementById('dataBar').innerHTML =
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
-    '<button type="button" class="data-btn" id="importBtn">导入收集记录</button>' +
+    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
     '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden>';
-  document.getElementById('exportBtn').addEventListener('click', exportCollected);
+  document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
-  document.getElementById('importFile').addEventListener('change', importCollected);
+  document.getElementById('importFile').addEventListener('change', backup.importCollected);
+  if (focusedAction) document.getElementById(focusedAction)?.focus();
 }
 
 document.getElementById('navTabs').addEventListener('click', e => {
@@ -3077,6 +3140,7 @@ setInterval(() => {
 // later.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  collection.refresh();
   const stamp = clockStamp();
   if (stamp === lastTickStamp) return;
   lastTickStamp = stamp;
@@ -3085,6 +3149,6 @@ document.addEventListener('visibilitychange', () => {
 
 renderDataBar();
 renderAll();
-if (collectionLoadFailed) showCollectionLoadWarning();
+if (collection.loadFailed) showCollectionLoadWarning();
 else if (storageAccessError) showStorageWarning();
 })();

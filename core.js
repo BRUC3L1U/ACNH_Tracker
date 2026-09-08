@@ -262,9 +262,12 @@ export function getTimeRangeLabel(hours) {
     ranges.pop();
     ranges.unshift({ start: last.start, end: head.end });
   }
-  return ranges.map(range => range.start === range.end
-    ? range.start + '时'
-    : range.start + '-' + range.end + '时').join(' / ');
+  const clock = hour => String(hour % 24).padStart(2, '0') + ':00';
+  return ranges.map(range => {
+    const end = range.end + 1;
+    const nextDay = end >= 24 || end <= range.start;
+    return clock(range.start) + '–' + (nextDay ? '次日' : '') + clock(end);
+  }).join(' / ');
 }
 
 export function getStorageModeNotice(protocol) {

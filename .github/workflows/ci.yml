@@ -17,10 +17,5 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
-      - name: Smoke test direct file opening
-        run: |
-          google-chrome --headless=new --no-sandbox --disable-gpu \
-            --allow-file-access-from-files --dump-dom \
-            "file://$GITHUB_WORKSPACE/index.html" > "$RUNNER_TEMP/acnh-file.html"
-          grep -q 'class="nav-tab' "$RUNNER_TEMP/acnh-file.html"
-          grep -q 'class="creature-item' "$RUNNER_TEMP/acnh-file.html"
+      - name: Browser interactions and direct file opening
+        run: npm run test:browser

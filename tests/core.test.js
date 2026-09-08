@@ -131,12 +131,21 @@ test('filters use explicit query state and do not mutate source data', () => {
 });
 
 test('time ranges handle midnight wrapping and empty data', () => {
-  assert.equal(getTimeRangeLabel([0, 1, 2, 21, 22, 23]), '21-2时');
-  assert.equal(getTimeRangeLabel([21, 22, 23, 0, 1, 2]), '21-2时');
+  assert.equal(getTimeRangeLabel([0, 1, 2, 21, 22, 23]), '21:00–次日03:00');
+  assert.equal(getTimeRangeLabel([21, 22, 23, 0, 1, 2]), '21:00–次日03:00');
   assert.equal(getTimeRangeLabel([]), '未知');
 });
 
 test('file mode explains that browser storage is origin-specific', () => {
   assert.match(getStorageModeNotice('file:'), /HTTP.*不同.*存储/);
   assert.equal(getStorageModeNotice('http:'), '');
+});
+
+test('time labels use exclusive end boundaries for full hours', () => {
+  assert.equal(getTimeRangeLabel([9,10,11,12,13,14,15,16]), '09:00–17:00');
+  assert.equal(getTimeRangeLabel([23]), '23:00–次日00:00');
+  assert.equal(getTimeRangeLabel([0]), '00:00–01:00');
+  assert.equal(getTimeRangeLabel([22,23,0,1]), '22:00–次日02:00');
+  assert.equal(getTimeRangeLabel([9,10,16]), '09:00–11:00 / 16:00–17:00');
+  assert.equal(getTimeRangeLabel(Array.from({length:24}, (_,i)=>i)), '全天');
 });
