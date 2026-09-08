@@ -191,7 +191,7 @@ function filteredItems(tab) {
 
 function renderNavTabs() {
   document.getElementById('navTabs').innerHTML = CONFIG.TABS.map(t =>
-    '<button type="button" class="nav-tab' + (state.activeTab===t?' active':'') + '" data-tab="'+t+'" aria-pressed="'+(state.activeTab===t)+'">' + TAB_NAMES[t] + '</button>'
+    '<button type="button" class="nav-tab' + (state.activeTab===t?' active':'') + '" data-tab="'+t+'" aria-pressed="'+(state.activeTab===t)+'">' + '<span class="nav-index" aria-hidden="true">0'+(CONFIG.TABS.indexOf(t)+1)+'</span><span>'+TAB_NAMES[t]+'</span></button>'
   ).join('');
 }
 
@@ -203,11 +203,12 @@ function renderProgress() {
   const allTotal = ALL_DATA.length;
   const allCollected = ALL_DATA.filter(x => state.collected.has(x.item.id)).length;
   const allPct = allTotal > 0 ? (allCollected/allTotal*100).toFixed(1) : 0;
+  document.getElementById('collectionTitle').textContent = TAB_NAMES[state.activeTab] + '图鉴';
   document.getElementById('progressSection').innerHTML =
-    '<div class="progress-text"><span class="progress-label">'+TAB_NAMES[state.activeTab]+' 收集进度</span><span class="progress-pct">已收集 '+collected+' / '+total+' （'+pct+'%）</span></div>' +
-    '<div class="progress-bar" role="progressbar" aria-label="'+TAB_NAMES[state.activeTab]+'收集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><div class="progress-fill" style="width:'+pct+'%"></div></div>' +
-    '<div class="progress-text" style="margin-top:14px"><span class="progress-label" style="font-size:13px">总进度</span><span style="font-size:15px;font-weight:700;color:var(--color-primary-dark)">已收集 '+allCollected+' / '+allTotal+' （'+allPct+'%）</span></div>' +
-    '<div class="progress-bar" role="progressbar" aria-label="总收集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+allPct+'"><div class="progress-fill" style="width:'+allPct+'%"></div></div>';
+    '<div><div class="progress-text"><span class="progress-label">本类已收集</span><span class="progress-pct">'+collected+' / '+total+'<small>'+pct+'%</small></span></div>' +
+    '<div class="progress-bar" role="progressbar" aria-label="'+TAB_NAMES[state.activeTab]+'收集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><div class="progress-fill" style="width:'+pct+'%"></div></div></div>' +
+    '<div class="progress-total"><div class="progress-text"><span class="progress-label">全部图鉴</span><span class="progress-pct">'+allCollected+' / '+allTotal+'<small>'+allPct+'%</small></span></div>' +
+    '<div class="progress-bar" role="progressbar" aria-label="总收集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+allPct+'"><div class="progress-fill" style="width:'+allPct+'%"></div></div></div>';
 }
 
 function renderTodayPanel() {
@@ -237,7 +238,7 @@ function renderTodayPanel() {
       + item.price + ' 铃钱</span></div>';
   }
 
-  let html = '<button type="button" class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader" aria-expanded="'+state.todayOpen+'" aria-controls="todayBody"><span class="today-heading"><span class="arrow" aria-hidden="true">▶</span> 今日可捕捉 （'+monStr+' '+hour+'时）</span><span class="today-count">'+nowAvailable.length+' 种生物可捕捉</span></button>';
+  let html = '<button type="button" class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader" aria-expanded="'+state.todayOpen+'" aria-controls="todayBody"><span class="today-heading"><span class="arrow" aria-hidden="true">▶</span> 今日可捕捉 <span class="today-date">'+monStr+' · '+hour+'时</span></span><span class="today-count">'+nowAvailable.length+' 种生物可捕捉</span></button>';
   html += '<div class="today-body'+(state.todayOpen?' open':'')+'" id="todayBody"'+(state.todayOpen?'':' hidden')+'>';
   html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')
     + '<label class="today-toggle"><input type="checkbox" id="todayUncollected"'+(state.todayUncollectedOnly?' checked':'')+'>只看未收集</label></div>';
@@ -302,6 +303,20 @@ function renderTodayPanel() {
 // "what's still missing"). If a future change feels like it needs a search
 // box, that decision was made on purpose; don't add one without checking
 // with the project owner first.
+function filterSummary() {
+  const f = state.filters[state.activeTab];
+  const parts = [];
+  if (TAB_DEFINITIONS[state.activeTab].seasonal) {
+    parts.push(state.hemisphere === 'north' ? '北半球' : '南半球');
+    if (f.month != null) parts.push(f.month + '月');
+    parts.push(f.hour == null ? '任意时段' : f.hour === 'all' ? '全天出现' : f.hour + '时');
+  }
+  if (f.status !== 'all') parts.push(CONFIG.STATUS_OPTS.find(([value]) => value === f.status)[1]);
+  const selected = TAB_DEFINITIONS[state.activeTab].filters.flatMap(key => f[key]);
+  if (selected.length) parts.push(selected.length === 1 ? selected[0] : selected.length + '项条件');
+  return parts.join(' · ') || '全部作品';
+}
+
 function renderFilters() {
   const tab = state.activeTab;
   const f = state.filters[tab];
@@ -310,7 +325,7 @@ function renderFilters() {
   const shadows = getFilterOptions(DATA_MAP, tab, 'shadowSize');
   const weathers = getFilterOptions(DATA_MAP, tab, 'weather');
 
-  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel">🔍 筛选条件</button>';
+  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel"><span>筛选条件<span class="filter-summary" id="filterSummary">'+escapeHtml(filterSummary())+'</span></span></button>';
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'" id="filterPanel">';
 
   if (definition.seasonal) {
@@ -394,6 +409,7 @@ function renderFilters() {
 // classes (no innerHTML rebuild, so focus and scroll survive), and a clock
 // change additionally moves the is-now highlight on the month/hour grids.
 function syncFilterChips() {
+  document.getElementById('filterSummary').textContent = filterSummary();
   const f = state.filters[state.activeTab];
   const curMon = getLocalTime().getMonth() + 1;
   const curHr = getLocalTime().getHours();

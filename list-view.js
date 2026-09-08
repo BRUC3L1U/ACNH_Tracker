@@ -88,9 +88,9 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
-    html += '<span style="font-size:12px;color:var(--color-text-muted)">共 '+count+' 条</span>';
-    html += '<button type="button" class="data-btn" id="markAllVisible" style="margin-left:8px;padding:4px 12px;font-size:12px"'+editDisabled+'>全标</button>';
-    html += '<button type="button" class="data-btn" id="unmarkAllVisible" style="padding:4px 12px;font-size:12px"'+editDisabled+'>全取消</button>';
+    html += '<span class="list-count">共 '+count+' 条</span>';
+    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+'>全标</button>';
+    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
   }
 
