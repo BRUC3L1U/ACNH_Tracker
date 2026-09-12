@@ -2,6 +2,7 @@ import { monthsForHemisphere } from './schema.js';
 import { getCollectionAccess, getTimeRangeLabel } from './core.js';
 import { escapeHtml } from './ui.js';
 import { buildArtRow } from './art-view.js';
+import { createImageFrame } from './image-view.js';
 
 export function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
   const CONFIG = { MONTHS: 12, SORT_KEYS: sortKeys };
@@ -24,8 +25,9 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
   let lastFiltered = [];
 
   function buildRow(item, tab, northern, curMon) {
-    let html = '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'">'
-      + '<span class="check-box" aria-hidden="true"></span><span class="creature-thumbnail"></span><span class="creature-main">';
+    const checkboxId = 'collected-' + item.id;
+    let html = '<input id="'+checkboxId+'" class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'" aria-describedby="months-'+item.id+'">'
+      + '<label class="collect-toggle" for="'+checkboxId+'"><span class="check-box" aria-hidden="true"></span></label><label class="creature-main" for="'+checkboxId+'">';
     html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
     // Sea creatures are all 海洋底部: a tag that never varies is pure noise.
     if (tab !== 'sea') {
@@ -45,36 +47,24 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     if (item.note) {
       html += '<span class="note">'+escapeHtml(item.note)+'</span>';
     }
-    html += '</span><span class="creature-meta"><span class="meta-row"><span class="meta-label">月:</span>';
+    html += '</label><label class="creature-meta" for="'+checkboxId+'"><span class="meta-row"><span class="meta-label" aria-hidden="true">月:</span>';
     const months = monthsForHemisphere(item, northern ? 'north' : 'south');
+    html += '<span class="sr-only month-description" id="months-'+item.id+'">出现月份：'+(months.length === 12 ? '全年' : months.join('、')+'月')+'。</span>';
     for (let m = 1; m <= CONFIG.MONTHS; m++) {
-      html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
+      html += '<span aria-hidden="true" class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
     }
     // Hour availability as a text range rather than 24 cells per row: the 24-cell
     // grid was ~4800 elements for an 80-row list and dominated both the HTML
     // payload and layout cost.
     html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-      + getTimeRangeLabel(item.hours) + '</span></span></span>';
+      + getTimeRangeLabel(item.hours) + '</span></span></label>';
 
-    const el = document.createElement('label');
-    el.className = 'creature-item';
+    const el = document.createElement('div');
+    el.className = 'creature-item creature-row';
     el.dataset.id = item.id;
     el.innerHTML = html;
-    const image = document.createElement('img');
-    image.alt = item.name;
-    image.width = 64;
-    image.height = 64;
-    image.loading = 'lazy';
-    image.decoding = 'async';
-    image.referrerPolicy = 'no-referrer';
-    image.addEventListener('error', () => {
-      const fallback = document.createElement('span');
-      fallback.className = 'creature-image-error';
-      fallback.textContent = '图片暂不可用';
-      el.querySelector('.creature-thumbnail').replaceChildren(fallback);
-    }, { once: true });
-    image.src = item.image;
-    el.querySelector('.creature-thumbnail').appendChild(image);
+    el.querySelector('.collect-toggle').after(createImageFrame(item.image, item.name,
+      'creature-thumbnail', 'creature-image-error', { width: 72, height: 72, labelFor: checkboxId }));
     return el;
   }
 
@@ -88,7 +78,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
-    html += '<span class="list-count">共 '+count+' 条</span>';
+    document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
     html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+'>全标</button>';
     html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
@@ -103,6 +93,8 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     const focusedSort = document.activeElement?.classList.contains('sort-btn')
       ? document.activeElement.dataset.sort
       : null;
+    const focusedAction = document.activeElement?.closest('#listHeader button')?.id;
+    const focusedIndex = focusedId ? lastFiltered.findIndex(item => item.id === focusedId) : -1;
     const tab = state.activeTab;
     const filtered = filteredItems(tab);
     lastFiltered = filtered;
@@ -112,6 +104,8 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     if (filtered.length === 0) {
       rows.innerHTML = '<div class="empty-state">没有符合条件的条目，请调整筛选条件 🔍</div>';
       if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+      else if (focusedAction) document.getElementById(focusedAction)?.focus();
+      else if (focusedId) document.getElementById('filterToggle').focus();
       return;
     }
 
@@ -140,8 +134,13 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
       frag.appendChild(el);
     }
     rows.replaceChildren(frag);
-    if (focusedId) rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')?.focus();
+    if (focusedId) {
+      const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
+        || rows.querySelectorAll('.creature-checkbox')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
+      next?.focus({ preventScroll: true });
+    }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+    else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
     else if (focusedRowElement?.isConnected) focusedRowElement.focus();
   }
 

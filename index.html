@@ -38,7 +38,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .nav-footer{margin-top:auto;padding-top:28px;font-size:12px;color:var(--color-text-muted)}
 
 .main{max-width:1440px;margin-left:216px;padding:42px 48px 80px}
-.page-heading{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px;gap:16px}
+.page-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px}
 .page-heading h1{font-family:var(--font-body);font-size:32px;font-weight:700;line-height:1.3}
 .page-kicker{font-size:11px;letter-spacing:2px;color:var(--color-text-muted);margin-bottom:8px}
 
@@ -50,7 +50,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .progress-bar{height:4px;background:#dde2d5;overflow:hidden;border-radius:2px}
 .progress-fill{height:100%;background:var(--color-primary)}
 .progress-total .progress-fill{background:#8c9e82}
-.data-bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;margin-bottom:28px}
+.data-bar{margin-left:auto;flex-shrink:0;position:relative;z-index:110}
+.backup-menu>summary{min-height:40px;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;color:var(--color-text-muted);font-size:12px;cursor:pointer;list-style:none}
+.backup-menu>summary::-webkit-details-marker{display:none}
+.backup-menu>summary::after{content:"⌄";margin-left:8px}
+.backup-actions{position:absolute;right:0;top:calc(100% + 8px);width:220px;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:8px;box-shadow:0 6px 20px var(--color-shadow)}
 .storage-mode-note{margin-right:auto;max-width:600px;font-size:12px}
 .data-btn{min-height:40px;padding:6px 12px;border:1px solid var(--color-border);border-radius:6px;background:transparent;color:var(--color-text-muted);font-size:12px}
 
@@ -94,12 +98,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .list-header{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:12px 18px;border-bottom:1px solid var(--color-border);font-size:12px}
 .sort-btn{min-height:40px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--color-text-muted);font-size:12px}
 .sort-btn[aria-pressed=true]{color:var(--color-primary);background:#e9ede2}
-.list-count{font-size:12px;color:var(--color-text-muted)}
+.filter-result-count{font-size:12px;font-weight:500;color:var(--color-text-muted);margin-left:10px}
 .bulk-actions{display:flex;gap:6px}
 .list-header .data-btn{font-size:12px}
 
 .creature-item{padding:20px;border-bottom:1px solid var(--color-border)}
-label.creature-item{display:grid;grid-template-columns:24px 72px minmax(0,1fr);gap:4px 18px;align-items:center;cursor:pointer}
+.creature-row{display:grid;grid-template-columns:24px 72px minmax(0,1fr);gap:4px 18px;align-items:center;cursor:pointer}
+.collect-toggle{display:flex;cursor:pointer}
+.creature-main,.creature-meta,.art-title-group{cursor:pointer}
+.creature-thumbnail>label,.art-thumbnail-frame>label{display:flex;width:100%;height:100%;cursor:pointer}
 .check-box{width:24px;height:24px;border:1.5px solid #a9b4a1;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .check-box::after{content:'✓';font-size:14px;color:white;opacity:0}
 .creature-item.collected .check-box{background:var(--color-collected);border-color:var(--color-collected)}
@@ -157,6 +164,9 @@ label.creature-item{display:grid;grid-template-columns:24px 72px minmax(0,1fr);g
 .modal-btn{min-height:40px;padding:8px 16px;border:1px solid var(--color-border);border-radius:6px;background:transparent;color:var(--color-text)}
 .modal-btn-confirm{background:var(--color-primary);color:white;border-color:var(--color-primary)}
 
+.image-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;font-size:10px;line-height:1.2}
+.image-retry{min-height:40px;padding:4px;border:0;border-radius:4px;background:transparent;color:var(--color-primary);font-size:11px;font-weight:600}
+.art-comparison-frame>a{display:flex;width:100%;height:100%;align-items:center;justify-content:center}
 @media(hover:hover){.nav-tab:not(.active):hover{background:#dce4d2}
 .data-btn:hover,.filter-btn:not(.active):hover,.sort-btn:hover{background:#e9ede2;color:var(--color-primary)}
 .today-header:hover{background:#e1e8d8}
@@ -182,14 +192,17 @@ label.creature-item{display:grid;grid-template-columns:24px 72px minmax(0,1fr);g
 .nav-tabs{flex-direction:row;margin:0;gap:4px}
 .nav-tab{flex:1;justify-content:center;padding:8px 4px;min-height:44px;border-radius:6px 6px 0 0;font-size:13px;gap:6px}
 .nav-index{display:none}
-.main{margin:0;padding:26px 20px 48px}
-.page-heading{margin-bottom:20px}
+.main{margin:0;padding:18px 20px 48px}
+.page-heading{margin-bottom:12px;gap:12px}
+.page-kicker{display:none}
 .page-heading h1{font-size:27px}
-.progress-section{gap:20px;padding:18px 0}
-.progress-text{flex-direction:column;gap:3px;margin-bottom:8px}
+.progress-section{gap:20px;padding:12px 0;margin-bottom:12px}
+.progress-text{flex-direction:row;gap:6px;margin-bottom:6px;flex-wrap:wrap}
 .progress-pct{font-size:20px}
-.data-bar{margin-bottom:20px}
-.today-header{align-items:flex-start;padding:12px 14px}
+.data-bar{margin-bottom:0}
+.today-panel{margin-bottom:8px}
+.filter-bar{margin-bottom:16px}
+.today-header{align-items:flex-start;padding:10px 14px}
 .today-heading{font-size:13px}
 .today-date{display:block;flex-basis:100%;padding-left:17px}
 .today-count{font-size:11px;padding-top:2px}
@@ -201,10 +214,9 @@ label.creature-item{display:grid;grid-template-columns:24px 72px minmax(0,1fr);g
 .filter-btn{padding:6px 10px}
 .list-header{padding:10px 12px;gap:4px}
 .list-header .data-btn{padding:6px 8px}
-.list-count{margin-left:auto}
 .bulk-actions{margin-left:auto}
 .creature-item{padding:16px 12px}
-label.creature-item{grid-template-columns:22px 56px minmax(0,1fr);gap:8px 10px;align-items:start}
+.creature-row{grid-template-columns:22px 56px minmax(0,1fr);gap:8px 10px;align-items:start}
 .check-box{width:22px;height:22px;margin-top:2px}
 .creature-thumbnail{width:56px;height:56px;grid-row:1}
 .creature-main{gap:4px 6px}
@@ -224,7 +236,7 @@ label.creature-item{grid-template-columns:22px 56px minmax(0,1fr);gap:8px 10px;a
 .toast{bottom:16px}
 }
 
-@media(max-width:360px){.main{padding:22px 12px 40px}
+@media(max-width:360px){.main{padding:16px 12px 40px}
 .navbar{padding-left:12px;padding-right:12px}
 .heat-cell{width:16px}
 .meta-label{min-width:20px}
@@ -250,9 +262,8 @@ button:active:not(:focus-visible):not(:disabled){transform:none}
 </nav>
 
 <main class="main" id="main-content" tabindex="-1">
-  <header class="page-heading"><div><p class="page-kicker" lang="en">MY COLLECTION</p><h1 id="collectionTitle">我的图鉴</h1></div></header>
+  <header class="page-heading"><div><p class="page-kicker" lang="en">MY COLLECTION</p><h1 id="collectionTitle">我的图鉴</h1></div><div class="data-bar" id="dataBar"></div></header>
   <div class="progress-section" id="progressSection" aria-live="polite"></div>
-  <div class="data-bar" id="dataBar"></div>
   <div class="today-panel" id="todayPanel"></div>
   <div class="filter-bar" id="filterBar"></div>
   <div class="list-section" id="listSection"></div>

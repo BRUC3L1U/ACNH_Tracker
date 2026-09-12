@@ -7,7 +7,7 @@ export async function testArtBrowser(browser) {
   await page.evaluate(`localStorage.setItem('acnh_collected', '["fish_001","bug_001","sea_001"]');
     localStorage.setItem('acnh_ui', JSON.stringify({activeTab:'fish', filters:{fish:{month:9,hour:7,hourManual:true}}}))`);
   await page.reload();
-  await page.evaluate(`document.querySelector('[data-tab="art"]').click()`);
+  await page.click('[data-tab="art"]');
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 43);
   assert.equal(await page.evaluate('document.querySelector("#todayPanel").hidden'), true);
   assert.equal(await page.evaluate('document.querySelectorAll("#filterBar [data-hemi], #monthGrid, #hourGrid").length'), 0);
@@ -16,33 +16,37 @@ export async function testArtBrowser(browser) {
   assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /3 \/ 243/);
   console.log('PASS art tab migrates existing state and excludes seasonal controls');
 
-  await page.evaluate(`document.querySelector('[data-filter="artType"][data-value="雕塑"]').click()`);
+  await page.click('#filterToggle');
+  await page.click('[data-filter="artType"][data-value="雕塑"]');
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 13);
-  await page.evaluate(`document.querySelector('[data-filter="authenticity"][data-value="仅真品"]').click()`);
+  await page.click('[data-filter="authenticity"][data-value="仅真品"]');
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 2);
-  await page.evaluate(`document.querySelector('.art-item input').click()`);
+  await page.click('.art-item .check-box');
   await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).length === 4');
   const saved = await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected")).sort()');
   for (const id of ['fish_001', 'bug_001', 'sea_001']) assert.ok(saved.includes(id));
   await page.reload();
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 2);
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item input:checked").length'), 1);
-  await page.evaluate(`document.querySelector('[data-filter="status"][data-value="uncollected"]').click()`);
+  if (await page.evaluate('document.querySelector("#filterToggle").getAttribute("aria-expanded")') === 'false') await page.click('#filterToggle');
+  await page.click('[data-filter="status"][data-value="uncollected"]');
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 1);
-  await page.evaluate(`document.querySelector('#markAllVisible').click()`);
+  await page.click('#markAllVisible');
   await page.waitFor('document.querySelectorAll(".art-item").length === 0 && !!document.querySelector(".toast-action")');
-  await page.evaluate(`document.querySelector('.toast-action').click()`);
+  await page.click('.toast-action');
   await page.waitFor('document.querySelectorAll(".art-item").length === 1');
   assert.deepEqual(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected")).sort()'), saved);
   console.log('PASS art filters, persistence, filtered bulk actions and undo preserve creature records');
 
-  await page.evaluate(`document.querySelector('#filterReset').click(); document.querySelector('[data-id="art_001"] summary').click()`);
+  await page.click('#filterReset');
+  await page.click('[data-id="art_001"] summary');
   await page.waitFor('document.querySelectorAll("[data-id=art_001] .art-comparisons figure").length === 2');
   assert.deepEqual(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected")).sort()'), saved);
   assert.deepEqual(await page.evaluate('[...document.querySelectorAll("[data-id=art_001] figcaption")].map(x=>x.textContent)'), ['真品','赝品']);
   assert.match(await page.evaluate('document.querySelector("[data-id=art_001] .art-clues").textContent'), /咖啡渍/);
   assert.equal(await page.evaluate('document.querySelector("[data-id=art_001] .art-source-link").closest("label")'), null);
-  await page.evaluate(`document.querySelector('[data-id="art_001"] input').focus(); document.activeElement.click()`);
+  await page.evaluate(`document.querySelector('[data-id="art_001"] input').focus()`);
+  await page.press('Space');
   await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).includes("art_001")');
   assert.equal(await page.evaluate('document.querySelector("[data-id=art_001] details").open'), true);
   assert.equal(await page.evaluate('document.activeElement.dataset.id'), 'art_001');
@@ -56,24 +60,23 @@ export async function testArtBrowser(browser) {
   assert.equal(await page.evaluate('document.querySelectorAll(".art-item").length'), 43);
   assert.equal(await page.evaluate('"hour" in JSON.parse(localStorage.getItem("acnh_ui")).filters.art'), false);
   await page.evaluate('window.Date = window.NativeDate');
-  await page.evaluate(`document.querySelector('[data-tab="fish"]').click()`);
+  await page.click('[data-tab="fish"]');
   assert.equal(await page.evaluate('document.querySelector("#todayPanel").hidden'), false);
   assert.equal(await page.evaluate('document.querySelectorAll(".today-group-header").length'), 3);
   assert.equal(await page.evaluate('document.querySelectorAll(".today-group-header[data-group=art]").length'), 0);
   assert.equal(await page.evaluate('JSON.parse(localStorage.getItem("acnh_ui")).filters.fish.hour'), 7);
-  await page.evaluate(`document.querySelector('[data-tab="art"]').click()`);
+  await page.click('[data-tab="art"]');
   console.log('PASS clock updates keep art non-seasonal and creature filters intact');
 
+  await page.click('#backupMenu summary');
+  await page.evaluate(`window.exportCapture = {create: URL.createObjectURL, click: HTMLAnchorElement.prototype.click};
+    URL.createObjectURL = blob => { window.exportCapture.text = blob.text(); return window.exportCapture.create(blob); };
+    HTMLAnchorElement.prototype.click = function() {};`);
+  await page.click('#exportBtn');
   const exported = await page.evaluate(`(async () => {
-    const create = URL.createObjectURL;
-    const click = HTMLAnchorElement.prototype.click;
-    let text;
-    URL.createObjectURL = blob => { text = blob.text(); return create(blob); };
-    HTMLAnchorElement.prototype.click = function() {};
-    document.querySelector('#exportBtn').click();
-    URL.createObjectURL = create;
-    HTMLAnchorElement.prototype.click = click;
-    return JSON.parse(await text);
+    URL.createObjectURL = window.exportCapture.create;
+    HTMLAnchorElement.prototype.click = window.exportCapture.click;
+    return JSON.parse(await window.exportCapture.text);
   })()`);
   assert.ok(exported.collected.includes('art_001') && exported.collected.includes('fish_001'));
   await page.evaluate(`(() => {
@@ -83,15 +86,15 @@ export async function testArtBrowser(browser) {
     input.files = data.files;
     input.dispatchEvent(new Event('change', {bubbles:true}));
   })()`);
-  await page.waitFor('!!document.querySelector(".modal-overlay")');
-  await page.evaluate(`document.querySelector('[data-r="ok"]').click()`);
+  await page.waitFor('!!document.querySelector(".modal-overlay.show")');
+  await page.click('[data-r="ok"]');
   await page.waitFor('!document.querySelector(".modal-overlay") && !document.querySelector("#importBtn").disabled');
   await page.reload();
   assert.deepEqual(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected"))'), ['art_043','fish_001']);
   assert.equal(await page.evaluate('document.querySelector("[data-id=art_043] input").checked'), true);
   console.log('PASS mixed art and creature records export and import through the real UI');
 
-  await page.evaluate(`document.querySelector('[data-id="art_001"] summary').click()`);
+  await page.click('[data-id="art_001"] summary');
   for (const width of [320, 375, 768, 1280]) {
     await page.setViewport(width);
     const dimensions = await page.evaluate('({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth})');

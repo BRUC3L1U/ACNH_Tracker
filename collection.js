@@ -7,6 +7,16 @@ export function createCollectionController({ storage, key, knownIds, locks, read
   let loadFailed = false;
   let snapshot = null;
   let error = null;
+  const revisionKey = key + ':revisions';
+
+  function readRevisions() {
+    const result = storage.getItem(revisionKey);
+    if (!result.ok) throw result.error;
+    try {
+      const parsed = JSON.parse(result.value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  }
 
   function read() {
     const result = storage.getItem(key);
@@ -46,7 +56,9 @@ export function createCollectionController({ storage, key, knownIds, locks, read
         if (expected !== undefined) {
           const result = storage.getItem(key);
           if (!result.ok) throw result.error;
-          if (result.value !== expected) {
+          const revisionSnapshot = storage.getItem(revisionKey);
+          if (!revisionSnapshot.ok) throw revisionSnapshot.error;
+          if (result.value !== expected.value || revisionSnapshot.value !== expected.revisions) {
             refresh();
             onError('其他页面已修改收集记录，请重新导入并确认');
             return { ok: false, conflict: true };
@@ -56,8 +68,23 @@ export function createCollectionController({ storage, key, knownIds, locks, read
         } else {
           latest = read().collected;
         }
-        const result = operation(latest);
+        const revisions = readRevisions();
+        const result = operation(latest, revisions);
         const raw = JSON.stringify([...result.next]);
+        const changed = [...knownIds].filter(id => expected !== undefined || latest.has(id) !== result.next.has(id));
+        if (changed.length) {
+          const revision = crypto.randomUUID();
+          const nextRevisions = Object.fromEntries([...knownIds]
+            .filter(id => typeof revisions[id] === 'string')
+            .map(id => [id, revisions[id]]));
+          for (const id of changed) nextRevisions[id] = revision;
+          // Invalidate old undo before changing data. If the data write fails,
+          // an undo may become stale, but it can never overwrite a later edit.
+          // The collection array and exported backup format stay compatible.
+          const savedRevisions = storage.setItem(revisionKey, JSON.stringify(nextRevisions));
+          if (!savedRevisions.ok) throw savedRevisions.error;
+          if (result.changes) result.changes = result.changes.map(change => ({ ...change, revision }));
+        }
         const saved = storage.setItem(key, raw);
         if (!saved.ok) throw saved.error;
         collected = result.next;
@@ -80,11 +107,18 @@ export function createCollectionController({ storage, key, knownIds, locks, read
   return {
     get collected() { return collected; },
     get loadFailed() { return loadFailed; },
-    get snapshot() { return snapshot; },
+    get snapshot() {
+      const revisions = storage.getItem(revisionKey);
+      if (!revisions.ok) throw revisions.error;
+      return { value: snapshot, revisions: revisions.value };
+    },
     get error() { return error; },
     refresh,
     set(ids, add) { return transact(current => setCollectedForIds(current, ids, add)); },
-    undo(changes) { return transact(current => undoCollectedChanges(current, changes)); },
+    undo(changes) {
+      return transact((current, revisions) => undoCollectedChanges(current,
+        changes.filter(change => typeof change.revision === 'string' && revisions[change.id] === change.revision)));
+    },
     replace(incoming, expected) { return transact(() => ({ next: new Set(incoming) }), expected); }
   };
 }

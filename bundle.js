@@ -2979,6 +2979,7 @@ function escapeHtml(value) {
 let toastTimer = null;
 
 function showToast(message, options = {}) {
+  const previousFocus = document.activeElement;
   let toast = document.getElementById('toast');
   if (!toast) {
     toast = document.createElement('div');
@@ -2989,6 +2990,14 @@ function showToast(message, options = {}) {
     document.body.appendChild(toast);
   }
   toast.textContent = message;
+  toast.hidden = false;
+  function hide() {
+    const restoreFocus = toast.contains(document.activeElement);
+    toast.classList.remove('show');
+    toast.querySelector('.toast-action')?.remove();
+    toast.hidden = true;
+    if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+  }
   if (options.action) {
     const button = document.createElement('button');
     button.className = 'toast-action';
@@ -2996,7 +3005,7 @@ function showToast(message, options = {}) {
     button.textContent = options.action.label;
     button.addEventListener('click', () => {
       clearTimeout(toastTimer);
-      toast.classList.remove('show');
+      hide();
       options.action.onClick();
     });
     toast.appendChild(button);
@@ -3004,7 +3013,7 @@ function showToast(message, options = {}) {
   void toast.offsetWidth;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), options.duration || 2600);
+  toastTimer = setTimeout(hide, options.duration || 2600);
 }
 
 function confirmDialog(message, confirmLabel = '确定') {
@@ -3352,6 +3361,16 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
   let loadFailed = false;
   let snapshot = null;
   let error = null;
+  const revisionKey = key + ':revisions';
+
+  function readRevisions() {
+    const result = storage.getItem(revisionKey);
+    if (!result.ok) throw result.error;
+    try {
+      const parsed = JSON.parse(result.value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  }
 
   function read() {
     const result = storage.getItem(key);
@@ -3391,7 +3410,9 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
         if (expected !== undefined) {
           const result = storage.getItem(key);
           if (!result.ok) throw result.error;
-          if (result.value !== expected) {
+          const revisionSnapshot = storage.getItem(revisionKey);
+          if (!revisionSnapshot.ok) throw revisionSnapshot.error;
+          if (result.value !== expected.value || revisionSnapshot.value !== expected.revisions) {
             refresh();
             onError('其他页面已修改收集记录，请重新导入并确认');
             return { ok: false, conflict: true };
@@ -3401,8 +3422,23 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
         } else {
           latest = read().collected;
         }
-        const result = operation(latest);
+        const revisions = readRevisions();
+        const result = operation(latest, revisions);
         const raw = JSON.stringify([...result.next]);
+        const changed = [...knownIds].filter(id => expected !== undefined || latest.has(id) !== result.next.has(id));
+        if (changed.length) {
+          const revision = crypto.randomUUID();
+          const nextRevisions = Object.fromEntries([...knownIds]
+            .filter(id => typeof revisions[id] === 'string')
+            .map(id => [id, revisions[id]]));
+          for (const id of changed) nextRevisions[id] = revision;
+          // Invalidate old undo before changing data. If the data write fails,
+          // an undo may become stale, but it can never overwrite a later edit.
+          // The collection array and exported backup format stay compatible.
+          const savedRevisions = storage.setItem(revisionKey, JSON.stringify(nextRevisions));
+          if (!savedRevisions.ok) throw savedRevisions.error;
+          if (result.changes) result.changes = result.changes.map(change => ({ ...change, revision }));
+        }
         const saved = storage.setItem(key, raw);
         if (!saved.ok) throw saved.error;
         collected = result.next;
@@ -3425,11 +3461,18 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
   return {
     get collected() { return collected; },
     get loadFailed() { return loadFailed; },
-    get snapshot() { return snapshot; },
+    get snapshot() {
+      const revisions = storage.getItem(revisionKey);
+      if (!revisions.ok) throw revisions.error;
+      return { value: snapshot, revisions: revisions.value };
+    },
     get error() { return error; },
     refresh,
     set(ids, add) { return transact(current => setCollectedForIds(current, ids, add)); },
-    undo(changes) { return transact(current => undoCollectedChanges(current, changes)); },
+    undo(changes) {
+      return transact((current, revisions) => undoCollectedChanges(current,
+        changes.filter(change => typeof change.revision === 'string' && revisions[change.id] === change.revision)));
+    },
     replace(incoming, expected) { return transact(() => ({ next: new Set(incoming) }), expected); }
   };
 }
@@ -3489,24 +3532,83 @@ function createBackupActions(collection, knownIds) {
   return { exportCollected, importCollected, get importInProgress() { return importInProgress; } };
 }
 
-// Source: art-view.js
-function artImage(url, alt, className) {
+// Source: image-view.js
+const retries = new WeakMap();
+
+// Only connected, failed frames retry, once per frame on reconnect. Cached
+// rows do not retain window listeners, and hidden rows still load lazily.
+window.addEventListener('online', () => {
+  document.querySelectorAll('[data-image-failed]').forEach(frame => retries.get(frame)?.());
+});
+
+function createImageFrame(url, alt, className, errorClass, size = {}) {
   const frame = document.createElement('span');
   frame.className = className;
-  const image = document.createElement('img');
-  image.alt = alt;
-  image.loading = 'lazy';
-  image.decoding = 'async';
-  image.referrerPolicy = 'no-referrer';
-  image.addEventListener('error', () => {
-    const fallback = document.createElement('span');
-    fallback.className = 'art-image-error';
-    fallback.textContent = '图片暂不可用';
-    frame.replaceChildren(fallback);
-  }, { once: true });
-  image.src = url;
-  frame.appendChild(image);
+  let automaticRetries = 0;
+
+  function load() {
+    delete frame.dataset.imageFailed;
+    const image = document.createElement('img');
+    image.alt = alt;
+    if (size.width) image.width = size.width;
+    if (size.height) image.height = size.height;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.referrerPolicy = 'no-referrer';
+    image.addEventListener('error', () => {
+      frame.dataset.imageFailed = 'true';
+      const fallback = document.createElement('span');
+      fallback.className = errorClass + ' image-fallback';
+      const message = document.createElement('span');
+      message.textContent = '加载失败';
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'image-retry';
+      retry.textContent = '重试';
+      retry.setAttribute('aria-label', alt + '，重新加载图片');
+      retry.addEventListener('click', event => {
+        // Retry is separate from the image label and original-image link.
+        event.preventDefault();
+        event.stopPropagation();
+        const hadFocus = document.activeElement === retry;
+        load();
+        if (hadFocus) {
+          frame.tabIndex = -1;
+          frame.focus({ preventScroll: true });
+        }
+      });
+      fallback.append(message, retry);
+      frame.replaceChildren(fallback);
+    }, { once: true });
+    image.src = url;
+    if (size.link) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', alt + '，打开原图');
+      link.appendChild(image);
+      frame.replaceChildren(link);
+    } else if (size.labelFor) {
+      const label = document.createElement('label');
+      label.htmlFor = size.labelFor;
+      label.appendChild(image);
+      frame.replaceChildren(label);
+    } else frame.replaceChildren(image);
+  }
+
+  retries.set(frame, () => {
+    if (automaticRetries >= 1) return;
+    automaticRetries += 1;
+    load();
+  });
+  load();
   return frame;
+}
+
+// Source: art-view.js
+function artImage(url, alt, className, link = false, labelFor) {
+  return createImageFrame(url, alt, className, 'art-image-error', { link, labelFor });
 }
 
 function buildArtRow(item) {
@@ -3514,13 +3616,14 @@ function buildArtRow(item) {
   row.className = 'creature-item art-item';
   row.dataset.id = item.id;
   const hasFake = item.authenticity === '有赝品';
-  row.innerHTML = '<label class="art-collect">'
-    + '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'，已收集真品">'
-    + '<span class="check-box" aria-hidden="true"></span><span class="art-thumbnail"></span>'
-    + '<span class="art-title-group"><span class="art-title-line"><span class="creature-name">'+escapeHtml(item.name)+'</span>'
+  const checkboxId = 'collected-' + item.id;
+  row.innerHTML = '<div class="art-collect">'
+    + '<input id="'+checkboxId+'" class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'，已收集真品">'
+    + '<label class="collect-toggle" for="'+checkboxId+'"><span class="check-box" aria-hidden="true"></span></label><span class="art-thumbnail"></span>'
+    + '<label class="art-title-group" for="'+checkboxId+'"><span class="art-title-line"><span class="creature-name">'+escapeHtml(item.name)+'</span>'
     + '<span class="tag tag-location">'+item.artType+'</span>'
     + '<span class="tag '+(hasFake?'tag-shadow':'tag-location')+'">'+item.authenticity+'</span></span>'
-    + '<span class="art-real-name">'+escapeHtml(item.realName)+'</span></span></label>'
+    + '<span class="art-real-name">'+escapeHtml(item.realName)+'</span></label></div>'
     + '<details class="art-details"><summary>'+(hasFake?'查看鉴伪要点与对照图':'查看作品与来源')+'</summary>'
     + '<div class="art-detail-body"><div class="art-clues">'
     + '<p><strong>'+(hasFake?'真品特征':'真伪情况')+'</strong>'+escapeHtml(item.genuineNote)+'</p>'
@@ -3528,7 +3631,7 @@ function buildArtRow(item) {
     + '</div><div class="art-comparisons"></div>'
     + '<a class="art-source-link" href="'+escapeHtml(item.sourceUrl)+'" target="_blank" rel="noopener noreferrer">查看 BWIKI 条目</a>'
     + '</div></details>';
-  row.querySelector('.art-thumbnail').appendChild(artImage(item.image, item.name+'真品缩略图', 'art-thumbnail-frame'));
+  row.querySelector('.art-thumbnail').appendChild(artImage(item.image, item.name+'真品缩略图', 'art-thumbnail-frame', false, checkboxId));
   const details = row.querySelector('details');
   let imagesLoaded = false;
   details.addEventListener('toggle', () => {
@@ -3539,13 +3642,7 @@ function buildArtRow(item) {
       const figure = document.createElement('figure');
       const caption = document.createElement('figcaption');
       caption.textContent = comparison.label;
-      const link = document.createElement('a');
-      link.href = comparison.url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.setAttribute('aria-label', item.name+'，'+comparison.label+'，打开原图');
-      link.appendChild(artImage(comparison.url, item.name+'，'+comparison.label, 'art-comparison-frame'));
-      figure.append(caption, link);
+      figure.append(caption, artImage(comparison.url, item.name+'，'+comparison.label, 'art-comparison-frame', true));
       gallery.appendChild(figure);
     }
   });
@@ -3574,8 +3671,9 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
   let lastFiltered = [];
 
   function buildRow(item, tab, northern, curMon) {
-    let html = '<input class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'">'
-      + '<span class="check-box" aria-hidden="true"></span><span class="creature-thumbnail"></span><span class="creature-main">';
+    const checkboxId = 'collected-' + item.id;
+    let html = '<input id="'+checkboxId+'" class="creature-checkbox sr-only" type="checkbox" data-id="'+item.id+'" aria-label="'+escapeHtml(item.name)+'" aria-describedby="months-'+item.id+'">'
+      + '<label class="collect-toggle" for="'+checkboxId+'"><span class="check-box" aria-hidden="true"></span></label><label class="creature-main" for="'+checkboxId+'">';
     html += '<span class="creature-name">'+escapeHtml(item.name)+'</span>';
     // Sea creatures are all 海洋底部: a tag that never varies is pure noise.
     if (tab !== 'sea') {
@@ -3595,36 +3693,24 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
     if (item.note) {
       html += '<span class="note">'+escapeHtml(item.note)+'</span>';
     }
-    html += '</span><span class="creature-meta"><span class="meta-row"><span class="meta-label">月:</span>';
+    html += '</label><label class="creature-meta" for="'+checkboxId+'"><span class="meta-row"><span class="meta-label" aria-hidden="true">月:</span>';
     const months = monthsForHemisphere(item, northern ? 'north' : 'south');
+    html += '<span class="sr-only month-description" id="months-'+item.id+'">出现月份：'+(months.length === 12 ? '全年' : months.join('、')+'月')+'。</span>';
     for (let m = 1; m <= CONFIG.MONTHS; m++) {
-      html += '<span class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
+      html += '<span aria-hidden="true" class="heat-cell'+(months.includes(m)?' on':'')+(m===curMon?' current':'')+'">'+m+'</span>';
     }
     // Hour availability as a text range rather than 24 cells per row: the 24-cell
     // grid was ~4800 elements for an 80-row list and dominated both the HTML
     // payload and layout cost.
     html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-      + getTimeRangeLabel(item.hours) + '</span></span></span>';
+      + getTimeRangeLabel(item.hours) + '</span></span></label>';
 
-    const el = document.createElement('label');
-    el.className = 'creature-item';
+    const el = document.createElement('div');
+    el.className = 'creature-item creature-row';
     el.dataset.id = item.id;
     el.innerHTML = html;
-    const image = document.createElement('img');
-    image.alt = item.name;
-    image.width = 64;
-    image.height = 64;
-    image.loading = 'lazy';
-    image.decoding = 'async';
-    image.referrerPolicy = 'no-referrer';
-    image.addEventListener('error', () => {
-      const fallback = document.createElement('span');
-      fallback.className = 'creature-image-error';
-      fallback.textContent = '图片暂不可用';
-      el.querySelector('.creature-thumbnail').replaceChildren(fallback);
-    }, { once: true });
-    image.src = item.image;
-    el.querySelector('.creature-thumbnail').appendChild(image);
+    el.querySelector('.collect-toggle').after(createImageFrame(item.image, item.name,
+      'creature-thumbnail', 'creature-image-error', { width: 72, height: 72, labelFor: checkboxId }));
     return el;
   }
 
@@ -3638,7 +3724,7 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
-    html += '<span class="list-count">共 '+count+' 条</span>';
+    document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
     html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+'>全标</button>';
     html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
@@ -3653,6 +3739,8 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
     const focusedSort = document.activeElement?.classList.contains('sort-btn')
       ? document.activeElement.dataset.sort
       : null;
+    const focusedAction = document.activeElement?.closest('#listHeader button')?.id;
+    const focusedIndex = focusedId ? lastFiltered.findIndex(item => item.id === focusedId) : -1;
     const tab = state.activeTab;
     const filtered = filteredItems(tab);
     lastFiltered = filtered;
@@ -3662,6 +3750,8 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
     if (filtered.length === 0) {
       rows.innerHTML = '<div class="empty-state">没有符合条件的条目，请调整筛选条件 🔍</div>';
       if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+      else if (focusedAction) document.getElementById(focusedAction)?.focus();
+      else if (focusedId) document.getElementById('filterToggle').focus();
       return;
     }
 
@@ -3690,8 +3780,13 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
       frag.appendChild(el);
     }
     rows.replaceChildren(frag);
-    if (focusedId) rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')?.focus();
+    if (focusedId) {
+      const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
+        || rows.querySelectorAll('.creature-checkbox')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
+      next?.focus({ preventScroll: true });
+    }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
+    else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
     else if (focusedRowElement?.isConnected) focusedRowElement.focus();
   }
 
@@ -4010,7 +4105,7 @@ function renderFilters() {
   const shadows = getFilterOptions(DATA_MAP, tab, 'shadowSize');
   const weathers = getFilterOptions(DATA_MAP, tab, 'weather');
 
-  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel"><span>筛选条件<span class="filter-summary" id="filterSummary">'+escapeHtml(filterSummary())+'</span></span></button>';
+  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel"><span>筛选条件<span class="filter-result-count" id="filterResultCount"></span><span class="filter-summary" id="filterSummary">'+escapeHtml(filterSummary())+'</span></span></button>';
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'" id="filterPanel">';
 
   if (definition.seasonal) {
@@ -4247,13 +4342,15 @@ function renderAll() {
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
   const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
+  const menuOpen = document.getElementById('backupMenu')?.open || !access.canExport;
   const notice = access.canExport ? ''
     : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
   document.getElementById('dataBar').innerHTML =
+    '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary>备份</summary><div class="backup-actions">' +
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
     '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
-    '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden>';
+    '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
   document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', backup.importCollected);
@@ -4268,6 +4365,7 @@ document.getElementById('navTabs').addEventListener('click', e => {
   saveUIState();
   renderAll();
   document.querySelector('.nav-tab[data-tab="'+state.activeTab+'"]').focus();
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 });
 
 // Everything clock-driven is hour-granular: the today panel filters by hour

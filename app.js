@@ -325,7 +325,7 @@ function renderFilters() {
   const shadows = getFilterOptions(DATA_MAP, tab, 'shadowSize');
   const weathers = getFilterOptions(DATA_MAP, tab, 'weather');
 
-  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel"><span>筛选条件<span class="filter-summary" id="filterSummary">'+escapeHtml(filterSummary())+'</span></span></button>';
+  let html = '<button type="button" class="filter-toggle-btn" id="filterToggle" aria-expanded="'+state.filterOpen+'" aria-controls="filterPanel"><span>筛选条件<span class="filter-result-count" id="filterResultCount"></span><span class="filter-summary" id="filterSummary">'+escapeHtml(filterSummary())+'</span></span></button>';
   html += '<div class="filter-panel'+(state.filterOpen?' open':'')+'" id="filterPanel">';
 
   if (definition.seasonal) {
@@ -562,13 +562,15 @@ function renderAll() {
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
   const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
+  const menuOpen = document.getElementById('backupMenu')?.open || !access.canExport;
   const notice = access.canExport ? ''
     : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
   document.getElementById('dataBar').innerHTML =
+    '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary>备份</summary><div class="backup-actions">' +
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
     '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
-    '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden>';
+    '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
   document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', backup.importCollected);
@@ -583,6 +585,7 @@ document.getElementById('navTabs').addEventListener('click', e => {
   saveUIState();
   renderAll();
   document.querySelector('.nav-tab[data-tab="'+state.activeTab+'"]').focus();
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 });
 
 // Everything clock-driven is hour-granular: the today panel filters by hour

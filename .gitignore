@@ -1,9 +1,23 @@
 # macOS
 .DS_Store
 
-# Editor / agent configs
+# Dependencies and Cloudflare local cache
+node_modules/
+.wrangler/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Logs and test coverage
+*.log
+coverage/
+
+# Editor / agent configs and workspace data
 .claude/
 .vscode/
-
-# Agent workspace data
 .workbuddy/

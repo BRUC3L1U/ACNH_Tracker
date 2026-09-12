@@ -32,6 +32,7 @@ export async function launchBrowser(root) {
   let stderr = '';
   child.stderr.on('data', data => { stderr += data; });
   const pending = new Map();
+  const imageResponses = new Map();
   let nextId = 0;
   let buffer = '';
   function fail(error) {
@@ -47,6 +48,16 @@ export async function launchBrowser(root) {
     while ((boundary = buffer.indexOf('\0')) !== -1) {
       const message = JSON.parse(buffer.slice(0, boundary));
       buffer = buffer.slice(boundary + 1);
+      if (message.method === 'Fetch.requestPaused' && imageResponses.has(message.sessionId)) {
+        send('Fetch.fulfillRequest', {
+          requestId: message.params.requestId, responseCode: 200,
+          responseHeaders: [{name:'Content-Type',value:'image/png'}],
+          body: imageResponses.get(message.sessionId)
+        }, message.sessionId).catch(error => {
+          if (imageResponses.has(message.sessionId)) fail(error);
+        });
+        continue;
+      }
       const request = pending.get(message.id);
       if (!request) continue;
       pending.delete(message.id);
@@ -80,9 +91,38 @@ export async function launchBrowser(root) {
       }
       throw new Error('Browser condition failed: ' + expression);
     }
+    async function click(selector) {
+      await send('Page.bringToFront', {}, sessionId);
+      const point = await evaluate(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el || el.disabled || !el.getClientRects().length) throw new Error('Not clickable: ' + ${JSON.stringify(selector)});
+        el.scrollIntoView({block:'center',inline:'nearest'});
+        const r = el.getBoundingClientRect();
+        const x = r.left + r.width / 2, y = r.top + r.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || !(hit === el || el.contains(hit))) throw new Error('Click is obstructed: ' + ${JSON.stringify(selector)});
+        return {x,y};
+      })()`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 }, sessionId);
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 }, sessionId);
+    }
+    async function press(key, modifiers = 0) {
+      await send('Page.bringToFront', {}, sessionId);
+      const keys = { Tab: ['Tab', 9], Enter: ['Enter', 13], Space: [' ', 32], Escape: ['Escape', 27] };
+      const [value, code] = keys[key];
+      const params = {key: value, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers,
+        ...(key === 'Enter' ? {text:'\r', unmodifiedText:'\r'} : {})};
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', ...params }, sessionId);
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...params }, sessionId);
+    }
     await send('Page.navigate', { url }, sessionId);
-    await waitFor('!!document.querySelector(".creature-item")');
-    return { evaluate, waitFor,
+    await waitFor('!!document.querySelector("#listRows .creature-item, #listRows .empty-state")');
+    return { evaluate, waitFor, click, press,
+      activate: () => send('Page.bringToFront', {}, sessionId),
+      mockImages: async () => {
+        imageResponses.set(sessionId, (await readFile(join(root, 'favicon.png'))).toString('base64'));
+        await send('Fetch.enable', { patterns: [{urlPattern:'https://patchwiki.biligame.com/*'}] }, sessionId);
+      },
       setViewport: (width, height = 900) => send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId),
       blockUrls: async urls => {
         await send('Network.enable', {}, sessionId);
@@ -95,8 +135,11 @@ export async function launchBrowser(root) {
       reload: async () => {
       await send('Page.navigate', { url: 'about:blank' }, sessionId);
       await send('Page.navigate', { url }, sessionId);
-      await waitFor('!!document.querySelector(".creature-item")');
-    }, close: () => send('Target.closeTarget', { targetId }) };
+      await waitFor('!!document.querySelector("#listRows .creature-item, #listRows .empty-state")');
+    }, close: () => {
+      imageResponses.delete(sessionId);
+      return send('Target.closeTarget', { targetId });
+    } };
   }
   return { page, close: async () => {
     child.kill();

@@ -8,13 +8,14 @@ const publicAssets = ['index.html', 'bundle.js', 'favicon.png'];
 test('Cloudflare deploy uploads only the browser-ready static assets', async () => {
   const config = JSON.parse(await readFile(new URL('wrangler.jsonc', root), 'utf8'));
   const packageJson = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
-  const bunLock = await readFile(new URL('bun.lock', root), 'utf8');
+  const lock = JSON.parse(await readFile(new URL('package-lock.json', root), 'utf8'));
   assert.equal(config.name, 'acnh-tracker');
   assert.equal(config.assets?.directory, '.');
   assert.equal(packageJson.devDependencies?.wrangler, '4.128.0');
   assert.equal(packageJson.scripts?.postinstall, 'npm run check');
   assert.equal(packageJson.scripts?.deploy, 'wrangler deploy');
-  assert.match(bunLock, /"wrangler": \["wrangler@4\.128\.0"/);
+  assert.deepEqual(lock.packages[''].devDependencies, packageJson.devDependencies);
+  assert.equal(lock.packages['node_modules/wrangler'].version, packageJson.devDependencies.wrangler);
 
   const ignoreRules = (await readFile(new URL('.assetsignore', root), 'utf8'))
     .trim()

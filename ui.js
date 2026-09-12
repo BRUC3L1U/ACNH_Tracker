@@ -9,6 +9,7 @@ export function escapeHtml(value) {
 let toastTimer = null;
 
 export function showToast(message, options = {}) {
+  const previousFocus = document.activeElement;
   let toast = document.getElementById('toast');
   if (!toast) {
     toast = document.createElement('div');
@@ -19,6 +20,14 @@ export function showToast(message, options = {}) {
     document.body.appendChild(toast);
   }
   toast.textContent = message;
+  toast.hidden = false;
+  function hide() {
+    const restoreFocus = toast.contains(document.activeElement);
+    toast.classList.remove('show');
+    toast.querySelector('.toast-action')?.remove();
+    toast.hidden = true;
+    if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+  }
   if (options.action) {
     const button = document.createElement('button');
     button.className = 'toast-action';
@@ -26,7 +35,7 @@ export function showToast(message, options = {}) {
     button.textContent = options.action.label;
     button.addEventListener('click', () => {
       clearTimeout(toastTimer);
-      toast.classList.remove('show');
+      hide();
       options.action.onClick();
     });
     toast.appendChild(button);
@@ -34,7 +43,7 @@ export function showToast(message, options = {}) {
   void toast.offsetWidth;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), options.duration || 2600);
+  toastTimer = setTimeout(hide, options.duration || 2600);
 }
 
 export function confirmDialog(message, confirmLabel = '确定') {
