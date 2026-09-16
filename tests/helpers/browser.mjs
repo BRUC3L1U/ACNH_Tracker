@@ -91,6 +91,12 @@ export async function launchBrowser(root) {
       }
       throw new Error('Browser condition failed: ' + expression);
     }
+    async function clickAt(x, y) {
+      await send('Page.bringToFront', {}, sessionId);
+      for (const type of ['mousePressed', 'mouseReleased']) {
+        await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }, sessionId);
+      }
+    }
     async function click(selector) {
       await send('Page.bringToFront', {}, sessionId);
       const point = await evaluate(`(() => {
@@ -103,8 +109,7 @@ export async function launchBrowser(root) {
         if (!hit || !(hit === el || el.contains(hit))) throw new Error('Click is obstructed: ' + ${JSON.stringify(selector)});
         return {x,y};
       })()`);
-      await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 }, sessionId);
-      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 }, sessionId);
+      await clickAt(point.x, point.y);
     }
     async function press(key, modifiers = 0) {
       await send('Page.bringToFront', {}, sessionId);
@@ -117,7 +122,7 @@ export async function launchBrowser(root) {
     }
     await send('Page.navigate', { url }, sessionId);
     await waitFor('!!document.querySelector("#listRows .creature-item, #listRows .empty-state")');
-    return { evaluate, waitFor, click, press,
+    return { evaluate, waitFor, click, clickAt, press,
       activate: () => send('Page.bringToFront', {}, sessionId),
       mockImages: async () => {
         imageResponses.set(sessionId, (await readFile(join(root, 'favicon.png'))).toString('base64'));

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchBrowser } from './helpers/browser.mjs';
 import { testArtBrowser } from './art-browser.mjs';
+import { testRegressionBrowser } from './regression-browser.mjs';
 import { testInteractionBrowser } from './interaction-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
@@ -104,4 +105,5 @@ try {
   console.log('PASS direct file opening, safe saving and reload persistence');
   await testArtBrowser(browser);
   await testInteractionBrowser(browser);
+  await testRegressionBrowser(browser);
 } finally { await browser.close(); }

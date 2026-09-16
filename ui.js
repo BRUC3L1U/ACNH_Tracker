@@ -6,11 +6,23 @@ export function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+// Rebuilt controls keep their IDs, while their previous DOM nodes are detached.
+export function rememberFocus(element = document.activeElement) {
+  const id = element?.id;
+  return () => {
+    const target = id ? document.getElementById(id) : element;
+    if (target?.isConnected && !target.disabled) target.focus({ preventScroll: true });
+  };
+}
+
 let toastTimer = null;
+let toastReturnFocus = () => {};
 
 export function showToast(message, options = {}) {
-  const previousFocus = document.activeElement;
   let toast = document.getElementById('toast');
+  const hadToastFocus = toast?.contains(document.activeElement);
+  const returnFocus = hadToastFocus ? toastReturnFocus : rememberFocus();
+  toastReturnFocus = returnFocus;
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'toast';
@@ -26,7 +38,7 @@ export function showToast(message, options = {}) {
     toast.classList.remove('show');
     toast.querySelector('.toast-action')?.remove();
     toast.hidden = true;
-    if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    if (restoreFocus) returnFocus();
   }
   if (options.action) {
     const button = document.createElement('button');
@@ -40,6 +52,11 @@ export function showToast(message, options = {}) {
     });
     toast.appendChild(button);
   }
+  if (hadToastFocus) {
+    const action = toast.querySelector('.toast-action');
+    if (action) action.focus({ preventScroll: true });
+    else returnFocus();
+  }
   void toast.offsetWidth;
   toast.classList.add('show');
   clearTimeout(toastTimer);
@@ -48,7 +65,7 @@ export function showToast(message, options = {}) {
 
 export function confirmDialog(message, confirmLabel = '确定') {
   return new Promise(resolve => {
-    const previousFocus = document.activeElement;
+    const returnFocus = rememberFocus();
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML =
@@ -71,9 +88,9 @@ export function confirmDialog(message, confirmLabel = '确定') {
       document.removeEventListener('keydown', onKeyDown);
       setTimeout(() => {
         overlay.remove();
-        if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+        returnFocus();
+        resolve(result);
       }, 200);
-      resolve(result);
     };
 
     const onKeyDown = event => {

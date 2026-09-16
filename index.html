@@ -50,7 +50,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .progress-bar{height:4px;background:#dde2d5;overflow:hidden;border-radius:2px}
 .progress-fill{height:100%;background:var(--color-primary)}
 .progress-total .progress-fill{background:#8c9e82}
-.data-bar{margin-left:auto;flex-shrink:0;position:relative;z-index:110}
+.data-bar{margin-left:auto;flex-shrink:0;position:relative;z-index:10}
 .backup-menu>summary{min-height:40px;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;color:var(--color-text-muted);font-size:12px;cursor:pointer;list-style:none}
 .backup-menu>summary::-webkit-details-marker{display:none}
 .backup-menu>summary::after{content:"⌄";margin-left:8px}
@@ -92,6 +92,8 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .filter-btn.active{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
 .filter-btn.month-grid{width:40px;padding:6px 0}
 .filter-btn.is-now:not(.active){border-color:var(--color-accent-warm);color:var(--color-accent-warm)}
+.filter-footer{display:flex;justify-content:flex-end;gap:8px}
+.filter-results-btn{min-height:40px;padding:6px 12px;border:0;border-radius:6px;background:var(--color-primary);color:white;font-size:12px;font-weight:600}
 .filter-reset{min-height:40px;padding:6px 12px;border:0;background:transparent;color:var(--color-danger);border-radius:6px;font-size:12px}
 
 .list-section{background:var(--color-surface);border-top:2px solid var(--color-primary)}
@@ -208,7 +210,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .today-count{font-size:11px;padding-top:2px}
 .today-body{padding:0 14px 14px}
 .filter-summary{display:block;margin:2px 0 0;font-size:11px}
-.creature-item{scroll-margin-top:110px}
+.creature-item,.filter-toggle-btn{scroll-margin-top:110px}
 .filter-row{gap:8px}
 .filter-label{flex-basis:52px}
 .filter-btn{padding:6px 10px}

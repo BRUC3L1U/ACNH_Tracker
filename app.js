@@ -1,6 +1,6 @@
 import { DATA_MAP } from './data.js';
 import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere } from './schema.js';
-import { escapeHtml, showToast } from './ui.js';
+import { escapeHtml, showToast, rememberFocus } from './ui.js';
 import { createCollectionController } from './collection.js';
 import { createBackupActions } from './backup.js';
 import { createListView } from './list-view.js';
@@ -65,8 +65,8 @@ function handleHemisphereChange(hemi){
 }
 
 function hemisphereButtons(activeClass){
-  return '<button type="button" class="'+activeClass+(state.hemisphere==='north'?' active':'')+'" data-hemi="north" aria-pressed="'+(state.hemisphere==='north')+'">北半球</button>'
-       + '<button type="button" class="'+activeClass+(state.hemisphere==='south'?' active':'')+'" data-hemi="south" aria-pressed="'+(state.hemisphere==='south')+'">南半球</button>';
+  return '<button type="button" id="'+activeClass+'-north" class="'+activeClass+(state.hemisphere==='north'?' active':'')+'" data-hemi="north" aria-pressed="'+(state.hemisphere==='north')+'">北半球</button>'
+       + '<button type="button" id="'+activeClass+'-south" class="'+activeClass+(state.hemisphere==='south'?' active':'')+'" data-hemi="south" aria-pressed="'+(state.hemisphere==='south')+'">南半球</button>';
 }
 
 // The today panel re-renders on an hourly cadence, so its hemisphere buttons
@@ -212,6 +212,8 @@ function renderProgress() {
 }
 
 function renderTodayPanel() {
+  const panel = document.getElementById('todayPanel');
+  const returnFocus = rememberFocus(panel.contains(document.activeElement) ? document.activeElement : null);
   const showArt = state.activeTab === 'art';
   document.getElementById('todayPanel').hidden = showArt;
   if (showArt) return;
@@ -246,7 +248,7 @@ function renderTodayPanel() {
   for (const t of CREATURE_TABS) {
     const items = byType[t];
     const open = state.todayGroups[t];
-    html += '<h4><button type="button" class="today-group-header'+(open?' open':'')+'" data-group="'+t+'" aria-expanded="'+open+'" aria-controls="todayGroup-'+t+'"><span class="arrow" aria-hidden="true">▶</span> '+TAB_NAMES[t]+' （'+items.length+'）</button></h4>';
+    html += '<h4><button type="button" id="todayGroupToggle-'+t+'" class="today-group-header'+(open?' open':'')+'" data-group="'+t+'" aria-expanded="'+open+'" aria-controls="todayGroup-'+t+'"><span class="arrow" aria-hidden="true">▶</span> '+TAB_NAMES[t]+' （'+items.length+'）</button></h4>';
     html += '<div class="today-group-body'+(open?' open':'')+'" id="todayGroup-'+t+'"'+(open?'':' hidden')+'>';
     if (items.length === 0) {
       html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
@@ -293,7 +295,8 @@ function renderTodayPanel() {
       saveUIState();
     });
   });
-  bindHemisphereButtons(document.getElementById('todayPanel'));
+  bindHemisphereButtons(panel);
+  returnFocus();
 }
 
 // No name-search box: deliberate, not an oversight. Search was decided
@@ -397,8 +400,9 @@ function renderFilters() {
 
   }
 
-  html += '<div class="filter-row"><span style="flex:1"></span>';
+  html += '<div class="filter-footer">';
   html += '<button type="button" class="filter-reset" id="filterReset">重置全部</button>';
+  html += '<button type="button" class="filter-results-btn" id="filterShowResults">查看结果</button>';
   html += '</div></div>';
 
   document.getElementById('filterBar').innerHTML = html;
@@ -442,13 +446,18 @@ document.getElementById('filterBar').addEventListener('click', e => {
   const hemiBtn = e.target.closest('[data-hemi]');
   if (hemiBtn) return handleHemisphereChange(hemiBtn.dataset.hemi);
 
-  if (e.target.closest('#filterToggle')) {
-    state.filterOpen = !state.filterOpen;
+  const showResults = e.target.closest('#filterShowResults');
+  if (e.target.closest('#filterToggle') || showResults) {
+    state.filterOpen = showResults ? false : !state.filterOpen;
     saveUIState();
     const toggle = document.getElementById('filterToggle');
     const panel = document.getElementById('filterPanel');
     toggle.setAttribute('aria-expanded', state.filterOpen);
     panel.classList.toggle('open', state.filterOpen);
+    if (showResults) {
+      toggle.focus({ preventScroll: true });
+      toggle.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
     return;
   }
 
@@ -561,12 +570,13 @@ function renderAll() {
 
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
-  const focusedAction = document.activeElement?.closest('#dataBar button')?.id;
+  const bar = document.getElementById('dataBar');
+  const returnFocus = rememberFocus(bar.contains(document.activeElement) ? document.activeElement : null);
   const menuOpen = document.getElementById('backupMenu')?.open || !access.canExport;
   const notice = access.canExport ? ''
     : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
   document.getElementById('dataBar').innerHTML =
-    '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary>备份</summary><div class="backup-actions">' +
+    '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary id="backupToggle">备份</summary><div class="backup-actions">' +
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
     '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
     '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
@@ -574,7 +584,7 @@ function renderDataBar() {
   document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', backup.importCollected);
-  if (focusedAction) document.getElementById(focusedAction)?.focus();
+  returnFocus();
 }
 
 document.getElementById('navTabs').addEventListener('click', e => {

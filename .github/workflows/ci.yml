@@ -16,6 +16,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - run: npm run check
+      - name: Install locked dependencies and check source
+        run: npm ci --no-audit --no-fund
       - name: Browser interactions and direct file opening
         run: npm run test:browser
+      - name: Validate Cloudflare deployment without publishing
+        run: npm run deploy -- --dry-run --outdir "$RUNNER_TEMP/acnh-worker"
+        env:
+          WRANGLER_SEND_METRICS: "false"

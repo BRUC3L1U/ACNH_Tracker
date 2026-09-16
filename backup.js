@@ -1,5 +1,5 @@
 import { getCollectionAccess, parseBackup, serializeBackup, validateImportFileSize } from './core.js';
-import { confirmDialog, showToast } from './ui.js';
+import { confirmDialog, showToast, rememberFocus } from './ui.js';
 
 export function createBackupActions(collection, knownIds) {
   let importInProgress = false;
@@ -27,6 +27,7 @@ export function createBackupActions(collection, knownIds) {
     const input = event.target;
     const file = input.files[0];
     if (!file || importInProgress) return;
+    const returnFocus = rememberFocus(document.getElementById('importBtn'));
     importInProgress = true;
     document.getElementById('importBtn').disabled = true;
     try {
@@ -49,6 +50,7 @@ export function createBackupActions(collection, knownIds) {
       importInProgress = false;
       document.getElementById('importBtn').disabled = false;
       input.value = '';
+      returnFocus();
     }
   }
 
