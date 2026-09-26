@@ -4,6 +4,7 @@ import { launchBrowser } from './helpers/browser.mjs';
 import { testArtBrowser } from './art-browser.mjs';
 import { testRegressionBrowser } from './regression-browser.mjs';
 import { testInteractionBrowser } from './interaction-browser.mjs';
+import { testAuditBrowser } from './audit-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const browser = await launchBrowser(root);
@@ -30,6 +31,7 @@ try {
   const importFile = async (page, collected) => {
     await page.activate();
     if (!await page.evaluate('document.querySelector("#backupMenu").open')) await page.click('#backupMenu summary');
+    await page.waitFor('!document.querySelector("#importBtn").disabled');
     await page.evaluate('(() => { const input = document.querySelector("#importFile"); const transfer = new DataTransfer(); transfer.items.add(new File([' + JSON.stringify(JSON.stringify({version:1, collected})) + '], "backup.json", {type:"application/json"})); input.files = transfer.files; input.dispatchEvent(new Event("change", {bubbles:true})); })()');
     await page.waitFor('!!document.querySelector(".modal-overlay.show")');
   };
@@ -80,7 +82,7 @@ try {
   await a.click('#filterToggle');
   await a.click('[data-filter="hour"][data-value="none"]');
   await a.click('#filterToggle');
-  assert.equal(await a.evaluate(`document.querySelector('.creature-item[data-id="fish_002"] .meta-hours').textContent`), '09:00–17:00');
+  assert.equal(await a.evaluate(`document.querySelector('.creature-item[data-id="fish_002"] .meta-hours').textContent`), '09:00–16:00');
   console.log('PASS exclusive time boundary rendered in browser');
 
   const beforeFailure = await stored(a);
@@ -106,4 +108,5 @@ try {
   await testArtBrowser(browser);
   await testInteractionBrowser(browser);
   await testRegressionBrowser(browser);
+  await testAuditBrowser(browser);
 } finally { await browser.close(); }

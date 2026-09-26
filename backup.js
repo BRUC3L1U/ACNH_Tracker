@@ -5,6 +5,10 @@ export function createBackupActions(collection, knownIds) {
   let importInProgress = false;
 
   function exportCollected() {
+    if (collection.isSaving) {
+      showToast('正在保存，请稍后再导出');
+      return;
+    }
     collection.refresh();
     if (!getCollectionAccess(collection.loadFailed).canExport) {
       showToast('未能加载已有收集记录，已暂停导出；可导入有效备份恢复');
@@ -27,12 +31,17 @@ export function createBackupActions(collection, knownIds) {
     const input = event.target;
     const file = input.files[0];
     if (!file || importInProgress) return;
+    if (collection.isSaving) {
+      input.value = '';
+      showToast('正在保存，请稍后再导入');
+      return;
+    }
     const returnFocus = rememberFocus(document.getElementById('importBtn'));
     importInProgress = true;
     document.getElementById('importBtn').disabled = true;
     try {
       validateImportFileSize(file.size);
-      const { collected: incoming, dropped } = parseBackup(await file.text(), knownIds);
+      const { collected: incoming, unknown } = parseBackup(await file.text(), knownIds);
       collection.refresh();
       const expected = collection.snapshot;
       if (collection.collected.size > 0 || collection.loadFailed) {
@@ -42,7 +51,7 @@ export function createBackupActions(collection, knownIds) {
         if (!await confirmDialog(message, '覆盖导入')) return;
       }
       if ((await collection.replace(incoming, expected)).ok) {
-        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (dropped > 0 ? '（已忽略 ' + dropped + ' 条无法识别的记录）' : ''));
+        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (unknown > 0 ? '（其中 ' + unknown + ' 条当前图鉴尚未收录，已保留）' : ''));
       }
     } catch (error) {
       showToast('导入失败：' + error.message);

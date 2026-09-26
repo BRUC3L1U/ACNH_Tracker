@@ -85,14 +85,33 @@ test('backup round-trips an empty collection', () => {
   const text = serializeBackup(new Set());
   const parsed = parseBackup(text, knownIds);
   assert.equal(parsed.collected.size, 0);
-  assert.equal(parsed.dropped, 0);
+  assert.equal(parsed.unknown, 0);
 });
 
-test('backup accepts the legacy array and rejects unknown versions and oversized lists', () => {
+test('backup accepts the legacy array and rejects unknown versions and oversized files', () => {
   assert.deepEqual([...parseBackup('["fish_001"]', knownIds).collected], ['fish_001']);
   assert.throws(() => parseBackup('{"version":2,"collected":[]}', knownIds), /不支持的备份版本/);
-  assert.throws(() => parseBackup(JSON.stringify({ version: 1, collected: Array(knownIds.size + 1).fill('fish_001') }), knownIds), /数量超出上限/);
-  assert.throws(() => parseBackup('{"version":1,"collected":["unknown"]}', knownIds), /没有可识别/);
+  assert.throws(() => parseBackup(JSON.stringify({ version: 1, collected: ['x'.repeat(64 * 1024)] }), knownIds), /64 KB/);
+  assert.throws(() => parseBackup('{"version":1,"collected":[42]}', knownIds), /字符串数组/);
+});
+
+test('backups round-trip newer catalogue IDs even when the old catalogue is smaller', () => {
+  const olderIds = new Set(['fish_001']);
+  for (const values of [['fish_001','art_001'], ['art_001'], []]) {
+    const restored = parseBackup(serializeBackup(new Set(values)), olderIds);
+    assert.deepEqual([...restored.collected], values);
+    assert.equal(restored.unknown, values.filter(id => !olderIds.has(id)).length);
+  }
+});
+
+test('a backup near the byte limit remains importable after export', () => {
+  const text = JSON.stringify({version:1, collected:['x'.repeat(64 * 1024 - 40)]});
+  const parsed = parseBackup(text, knownIds);
+  const exported = serializeBackup(parsed.collected);
+  assert.ok(new TextEncoder().encode(exported).byteLength <= 64 * 1024);
+  assert.deepEqual(parseBackup(exported, knownIds).collected, parsed.collected);
+  // An old array must also leave room for the versioned export envelope.
+  assert.throws(() => parseBackup(JSON.stringify(['x'.repeat(64 * 1024 - 10)]), knownIds), /64 KB/);
 });
 
 test('import file size is bounded before reading', () => {

@@ -126,6 +126,7 @@ export async function testInteractionBrowser(browser) {
       await page.click('.art-item .check-box');
       await page.waitFor('document.querySelector(".art-item input").checked');
       await page.click('#backupMenu summary');
+      await page.waitFor('!document.querySelector("#importBtn").disabled');
       await page.evaluate(`(() => {
         const input = document.querySelector('#importFile');
         const transfer = new DataTransfer();

@@ -1,5 +1,5 @@
 import { DATA_MAP } from './data.js';
-import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere } from './schema.js';
+import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere, hoursForMonth } from './schema.js';
 import { escapeHtml, showToast, rememberFocus } from './ui.js';
 import { createCollectionController } from './collection.js';
 import { createBackupActions } from './backup.js';
@@ -85,8 +85,8 @@ function bindHemisphereButtons(root){
 // app.js having run, which leaks into anything else reading that data.
 const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
 
-// Collected ids are only meaningful if they match a real creature: imports
-// are validated against this set so junk ids can't squat in storage forever.
+// Only current catalogue IDs contribute to progress; unknown IDs remain in
+// storage and backups so an older page cannot erase a newer catalogue.
 const KNOWN_IDS = new Set(ALL_DATA.map(x => x.item.id));
 
 const collection = createCollectionController({
@@ -172,12 +172,11 @@ function saveHemisphere(next) {
 
 function getLocalTime() { return new Date(); }
 
-function isAvailableNow(item) {
-  const now = getLocalTime();
+function isAvailableNow(item, now = getLocalTime()) {
   const month = now.getMonth() + 1;
   const hour = now.getHours();
   const months = monthsForHemisphere(item, state.hemisphere);
-  return months.includes(month) && item.hours.includes(hour);
+  return months.includes(month) && hoursForMonth(item, state.hemisphere, month).includes(hour);
 }
 
 function filteredItems(tab) {
@@ -221,7 +220,7 @@ function renderTodayPanel() {
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  let nowAvailable = ALL_DATA.filter(x => TAB_DEFINITIONS[x.type].seasonal && isAvailableNow(x.item));
+  let nowAvailable = ALL_DATA.filter(x => TAB_DEFINITIONS[x.type].seasonal && isAvailableNow(x.item, now));
   if (state.todayUncollectedOnly) {
     nowAvailable = nowAvailable.filter(x => !state.collected.has(x.item.id));
   }
@@ -231,7 +230,7 @@ function renderTodayPanel() {
   ]));
 
   function todayRow(item, tags){
-    const timeLabel = getTimeRangeLabel(item.hours);
+    const timeLabel = getTimeRangeLabel(hoursForMonth(item, state.hemisphere, now.getMonth() + 1));
     const note = item.note ? '<span class="note">'+escapeHtml(item.note)+'</span>' : '';
     return '<div class="today-item"><span style="font-weight:600;min-width:80px">'
       + escapeHtml(item.name) + '</span>' + tags + note
@@ -503,13 +502,15 @@ document.getElementById('filterBar').addEventListener('click', e => {
 });
 
 const listView = createListView({
-  state, filteredItems, isLoadFailed: () => collection.loadFailed, sortKeys: CONFIG.SORT_KEYS
+  state, filteredItems, isLoadFailed: () => collection.loadFailed, sortKeys: CONFIG.SORT_KEYS,
+  isSaving: () => collection.isSaving, pendingValue: id => collection.pendingValue(id)
 });
 function renderList() { listView.render(); }
 
 // Bulk actions record only ids whose state actually changed. Undo restores an
 // id only while it still has the bulk result, so a later single-row edit wins.
 async function bulkSetCollected(add) {
+  if (collection.isSaving) return;
   if (listView.filtered.length === 0) return;
   const verb = add ? '标记' : '取消标记';
   const result = await collection.set(listView.filtered.map(x => x.id), add);
@@ -578,8 +579,8 @@ function renderDataBar() {
   document.getElementById('dataBar').innerHTML =
     '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary id="backupToggle">备份</summary><div class="backup-actions">' +
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
-    '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
-    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
+    '<button type="button" class="data-btn" id="exportBtn"'+(!access.canExport?' disabled aria-describedby="storageModeNote"':collection.isSaving?' disabled':'')+'>导出收集记录</button>' +
+    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress || collection.isSaving?' disabled':'')+'>导入收集记录</button>' +
     '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
   document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());

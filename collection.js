@@ -1,4 +1,4 @@
-import { normalizeCollected, setCollectedForIds, undoCollectedChanges } from './core.js';
+import { normalizeCollected, setCollectedForIds, undoCollectedChanges, serializeBackup, validateImportFileSize } from './core.js';
 
 // All collection writers share one origin-scoped lock. Read inside the lock,
 // then apply the user's operation to that fresh snapshot, never to a stale tab.
@@ -8,6 +8,7 @@ export function createCollectionController({ storage, key, knownIds, locks, read
   let snapshot = null;
   let error = null;
   const revisionKey = key + ':revisions';
+  const pending = new Map();
 
   function readRevisions() {
     const result = storage.getItem(revisionKey);
@@ -27,7 +28,9 @@ export function createCollectionController({ storage, key, knownIds, locks, read
     if (!Array.isArray(parsed) || !parsed.every(id => typeof id === 'string')) {
       throw new Error('浏览器中的收集记录格式损坏');
     }
-    return { raw, collected: normalizeCollected(parsed, knownIds) };
+    // A newer catalogue may have saved IDs this page cannot display. Keep
+    // them through ordinary edits, exports and undo instead of deleting them.
+    return { raw, collected: new Set(parsed) };
   }
 
   function refresh(notify = true) {
@@ -48,7 +51,10 @@ export function createCollectionController({ storage, key, knownIds, locks, read
     if (notify && (snapshot !== previousSnapshot || loadFailed !== previouslyFailed)) onChange();
   }
 
-  async function transact(operation, expected) {
+  async function transact(operation, expected, pendingValues = new Map()) {
+    const ticket = Symbol();
+    pending.set(ticket, pendingValues);
+    onChange();
     try {
       if (!locks?.request) throw new Error('当前浏览器不支持安全保存，请使用新版 Edge、Chrome 或 Safari，并通过 HTTPS、本地服务或直接打开文件使用');
       return await locks.request(key + ':write', () => {
@@ -70,13 +76,15 @@ export function createCollectionController({ storage, key, knownIds, locks, read
         }
         const revisions = readRevisions();
         const result = operation(latest, revisions);
+        validateImportFileSize(new TextEncoder().encode(serializeBackup(result.next)).byteLength);
         const raw = JSON.stringify([...result.next]);
-        const changed = [...knownIds].filter(id => expected !== undefined || latest.has(id) !== result.next.has(id));
+        const changed = expected !== undefined
+          ? [...new Set([...knownIds, ...Object.keys(revisions), ...result.next])]
+          : [...knownIds].filter(id => latest.has(id) !== result.next.has(id));
         if (changed.length) {
           const revision = crypto.randomUUID();
-          const nextRevisions = Object.fromEntries([...knownIds]
-            .filter(id => typeof revisions[id] === 'string')
-            .map(id => [id, revisions[id]]));
+          const nextRevisions = Object.fromEntries(Object.entries(revisions)
+            .filter(([, value]) => typeof value === 'string'));
           for (const id of changed) nextRevisions[id] = revision;
           // Invalidate old undo before changing data. If the data write fails,
           // an undo may become stale, but it can never overwrite a later edit.
@@ -92,14 +100,15 @@ export function createCollectionController({ storage, key, knownIds, locks, read
         loadFailed = false;
         error = null;
         try { clearLegacy?.(); } catch {}
-        onChange();
         return { ...result, ok: true };
       });
     } catch (cause) {
       refresh(false);
-      onChange();
       onError(cause.message || '浏览器阻止了本地存储，当前更改无法保存');
       return { ok: false };
+    } finally {
+      pending.delete(ticket);
+      onChange();
     }
   }
 
@@ -107,6 +116,12 @@ export function createCollectionController({ storage, key, knownIds, locks, read
   return {
     get collected() { return collected; },
     get loadFailed() { return loadFailed; },
+    get isSaving() { return pending.size > 0; },
+    pendingValue(id) {
+      let value;
+      for (const values of pending.values()) if (values.has(id)) value = values.get(id);
+      return value;
+    },
     get snapshot() {
       const revisions = storage.getItem(revisionKey);
       if (!revisions.ok) throw revisions.error;
@@ -114,7 +129,11 @@ export function createCollectionController({ storage, key, knownIds, locks, read
     },
     get error() { return error; },
     refresh,
-    set(ids, add) { return transact(current => setCollectedForIds(current, ids, add)); },
+    set(ids, add) {
+      const editableIds = ids.filter(id => knownIds.has(id));
+      return transact(current => setCollectedForIds(current, editableIds, add), undefined,
+        new Map(editableIds.map(id => [id, add])));
+    },
     undo(changes) {
       return transact((current, revisions) => undoCollectedChanges(current,
         changes.filter(change => typeof change.revision === 'string' && revisions[change.id] === change.revision)));

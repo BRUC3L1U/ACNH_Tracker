@@ -1,4 +1,4 @@
-import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere } from './schema.js';
+import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere, hoursForMonth, shiftMonths } from './schema.js';
 
 export const BACKUP_VERSION = 1;
 export const MAX_IMPORT_BYTES = 64 * 1024;
@@ -149,7 +149,7 @@ export function normalizeCollected(value, knownIds) {
 }
 
 export function serializeBackup(collected) {
-  return JSON.stringify({ version: BACKUP_VERSION, collected: [...collected] }, null, 2);
+  return JSON.stringify({ version: BACKUP_VERSION, collected: [...collected] });
 }
 
 export function validateImportFileSize(size) {
@@ -158,6 +158,7 @@ export function validateImportFileSize(size) {
 }
 
 export function parseBackup(text, knownIds) {
+  validateImportFileSize(new TextEncoder().encode(text).byteLength);
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -177,12 +178,14 @@ export function parseBackup(text, knownIds) {
   if (!Array.isArray(values) || !values.every(id => typeof id === 'string')) {
     throw new Error('收集记录必须是字符串数组');
   }
-  if (values.length > knownIds.size) throw new Error('收集记录数量超出上限');
-
-  const incoming = new Set(values.filter(id => knownIds.has(id)));
-  const dropped = new Set(values).size - incoming.size;
-  if (values.length > 0 && incoming.size === 0) throw new Error('文件中没有可识别的收集记录');
-  return { collected: incoming, dropped, legacy };
+  // IDs are opaque strings, including entries added by newer catalogues.
+  // Bound the file size, not its count against this page's catalogue size.
+  const incoming = new Set(values);
+  // Legacy arrays gain a version envelope on export. Check that the exported
+  // form also fits so a successful import can always be restored again.
+  validateImportFileSize(new TextEncoder().encode(serializeBackup(incoming)).byteLength);
+  const unknown = [...incoming].filter(id => !knownIds.has(id)).length;
+  return { collected: incoming, unknown, legacy };
 }
 
 export function setCollectedForIds(current, ids, add) {
@@ -219,8 +222,8 @@ export function applyFilters(data, query) {
   }
   if (filters.hour != null) {
     items = filters.hour === 'all'
-      ? items.filter(item => item.hours.length === 24)
-      : items.filter(item => item.hours.includes(filters.hour));
+      ? items.filter(item => hoursForMonth(item, hemisphere, filters.month ?? null).length === 24)
+      : items.filter(item => hoursForMonth(item, hemisphere, filters.month ?? null).includes(filters.hour));
   }
   if (filters.status === 'collected') items = items.filter(item => collected.has(item.id));
   if (filters.status === 'uncollected') items = items.filter(item => !collected.has(item.id));
@@ -270,4 +273,14 @@ export function getTimeRangeLabel(hours) {
     const nextDay = end >= 24 || end <= range.start;
     return clock(range.start) + '–' + (nextDay ? '次日' : '') + clock(end);
   }).join(' / ');
+}
+
+export function getAvailabilityLabel(item, hemisphere, month = null) {
+  if (!item.northSeasons || month !== null) {
+    return getTimeRangeLabel(hoursForMonth(item, hemisphere, month));
+  }
+  return item.northSeasons.map(season => {
+    const months = hemisphere === 'south' ? shiftMonths(season.months) : season.months;
+    return months.join('、') + '月：' + getTimeRangeLabel(season.hours);
+  }).join('；');
 }

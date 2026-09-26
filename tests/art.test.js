@@ -65,5 +65,5 @@ test('legacy and mixed collection backups survive expansion to 243 records', () 
   assert.deepEqual(parseBackup(serializeBackup(mixed), knownIds).collected, mixed);
   const full = parseBackup(serializeBackup(knownIds), knownIds);
   assert.equal(full.collected.size, 243);
-  assert.equal(full.dropped, 0);
+  assert.equal(full.unknown, 0);
 });

@@ -1,10 +1,10 @@
 import { monthsForHemisphere } from './schema.js';
-import { getCollectionAccess, getTimeRangeLabel } from './core.js';
+import { getCollectionAccess, getAvailabilityLabel } from './core.js';
 import { escapeHtml } from './ui.js';
 import { buildArtRow } from './art-view.js';
 import { createImageFrame } from './image-view.js';
 
-export function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
+export function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving, pendingValue }) {
   const CONFIG = { MONTHS: 12, SORT_KEYS: sortKeys };
   const getLocalTime = () => new Date();
   // Header and rows live in their own persistent containers so a re-render can
@@ -57,7 +57,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
     // grid was ~4800 elements for an 80-row list and dominated both the HTML
     // payload and layout cost.
     html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-      + getTimeRangeLabel(item.hours) + '</span></span></label>';
+      + getAvailabilityLabel(item, state.hemisphere, state.filters[tab].month) + '</span></span></label>';
 
     const el = document.createElement('div');
     el.className = 'creature-item creature-row';
@@ -70,6 +70,9 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
 
   function renderListHeader(count) {
     const editDisabled = getCollectionAccess(isLoadFailed()).canEdit ? '' : ' disabled';
+    // Keep the initiating bulk button focusable while the write is pending.
+    // The delegated handler ignores repeated activation until saving ends.
+    const busyAttribute = ' aria-disabled="'+isSaving()+'"';
     let html = '';
     CONFIG.SORT_KEYS.filter(sk => state.activeTab !== 'art' || sk.key !== 'price').forEach(sk => {
       const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
@@ -78,18 +81,17 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
+    html += '<span class="save-status" role="status">'+(isSaving() ? '正在保存…' : '')+'</span>';
     document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
-    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+'>全标</button>';
-    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+'>全取消</button></span>';
+    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+busyAttribute+'>全标</button>';
+    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
   }
 
   function renderList() {
     const canEdit = getCollectionAccess(isLoadFailed()).canEdit;
     const focusedRowElement = document.getElementById('listRows').contains(document.activeElement) ? document.activeElement : null;
-    const focusedId = document.activeElement?.classList.contains('creature-checkbox')
-      ? document.activeElement.dataset.id
-      : null;
+    const focusedId = focusedRowElement?.closest('.creature-item')?.dataset.id;
     const focusedSort = document.activeElement?.classList.contains('sort-btn')
       ? document.activeElement.dataset.sort
       : null;
@@ -111,7 +113,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
 
     const northern = state.hemisphere === 'north';
     const curMon = getLocalTime().getMonth() + 1;
-    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon;
+    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon + '|' + state.filters[tab].month;
     if (sig !== rowCacheSig) {
       rowCache.clear();
       rowCacheSig = sig;
@@ -126,7 +128,9 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
         el = tab === 'art' ? buildArtRow(item) : buildRow(item, tab, northern, curMon);
         rowCache.set(item.id, el);
       }
-      const collected = state.collected.has(item.id);
+      const pending = pendingValue(item.id);
+      const collected = pending === undefined ? state.collected.has(item.id) : pending;
+      el.setAttribute('aria-busy', pending !== undefined);
       el.classList.toggle('collected', collected);
       const checkbox = el.querySelector('.creature-checkbox');
       checkbox.checked = collected;
@@ -134,14 +138,15 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys })
       frag.appendChild(el);
     }
     rows.replaceChildren(frag);
-    if (focusedId) {
+    if (focusedRowElement?.isConnected && !focusedRowElement.disabled) {
+      focusedRowElement.focus({ preventScroll: true });
+    } else if (focusedId) {
       const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
         || rows.querySelectorAll('.creature-checkbox')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
       next?.focus({ preventScroll: true });
     }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
     else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
-    else if (focusedRowElement?.isConnected) focusedRowElement.focus();
   }
 
   return { render: renderList, get filtered() { return lastFiltered; } };

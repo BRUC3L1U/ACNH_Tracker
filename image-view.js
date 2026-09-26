@@ -12,6 +12,7 @@ export function createImageFrame(url, alt, className, errorClass, size = {}) {
   let automaticRetries = 0;
 
   function load() {
+    const hadFocus = frame.contains(document.activeElement);
     delete frame.dataset.imageFailed;
     const image = document.createElement('img');
     image.alt = alt;
@@ -35,12 +36,7 @@ export function createImageFrame(url, alt, className, errorClass, size = {}) {
         // Retry is separate from the image label and original-image link.
         event.preventDefault();
         event.stopPropagation();
-        const hadFocus = document.activeElement === retry;
         load();
-        if (hadFocus) {
-          frame.tabIndex = -1;
-          frame.focus({ preventScroll: true });
-        }
       });
       fallback.append(message, retry);
       frame.replaceChildren(fallback);
@@ -60,6 +56,10 @@ export function createImageFrame(url, alt, className, errorClass, size = {}) {
       label.appendChild(image);
       frame.replaceChildren(label);
     } else frame.replaceChildren(image);
+    if (hadFocus) {
+      frame.tabIndex = -1;
+      frame.focus({ preventScroll: true });
+    }
   }
 
   retries.set(frame, () => {

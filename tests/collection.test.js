@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSafeStorage } from '../core.js';
+import { createSafeStorage, serializeBackup } from '../core.js';
 import { createCollectionController } from '../collection.js';
 
 function setup(raw = '[]') {
@@ -144,4 +144,75 @@ test('import detects off-on edits even when the stored array returns to the same
   await b.set(['a'], true);
   assert.equal((await a.replace(new Set(['b']), expected)).conflict, true);
   assert.deepEqual([...a.collected], ['a']);
+});
+
+test('older catalogues preserve unknown records and their undo revisions', async () => {
+  const fixture = setup();
+  const older = fixture.create({ knownIds: new Set(['a']) });
+  const newer = fixture.create();
+  const bulk = await newer.set(['b', 'c'], true);
+  await older.set(['a'], true);
+  assert.deepEqual(JSON.parse(fixture.data.get('collected')), ['b', 'c', 'a']);
+  assert.equal(JSON.parse(fixture.data.get('collected:revisions')).b, bulk.changes[0].revision);
+  await older.set(['a'], false);
+  assert.deepEqual(JSON.parse(fixture.data.get('collected')), ['b', 'c']);
+  assert.equal((await newer.undo(bulk.changes)).restored, 2);
+  assert.deepEqual(JSON.parse(fixture.data.get('collected')), []);
+});
+
+test('pending edits retain the latest intention through refresh and earlier completions', async () => {
+  const fixture = setup();
+  const waiting = [];
+  const collection = fixture.create({ locks: { request: (_, action) => new Promise(resolve => waiting.push(() => resolve(action()))) } });
+  const first = collection.set(['a'], true);
+  assert.equal(collection.isSaving, true);
+  assert.equal(collection.pendingValue('a'), true);
+  collection.refresh();
+  assert.equal(collection.pendingValue('a'), true);
+  const second = collection.set(['a'], false);
+  assert.equal(collection.pendingValue('a'), false);
+  waiting.shift()();
+  await first;
+  assert.equal(collection.isSaving, true);
+  assert.equal(collection.pendingValue('a'), false);
+  waiting.shift()();
+  await second;
+  assert.equal(collection.isSaving, false);
+  assert.equal(collection.pendingValue('a'), undefined);
+  assert.deepEqual([...collection.collected], []);
+});
+
+test('failed pending saves clear the pending state and restore committed records', async () => {
+  const fixture = setup('["a"]');
+  const collection = fixture.create();
+  fixture.failWrites();
+  const save = collection.set(['a'], false);
+  assert.equal(collection.pendingValue('a'), false);
+  assert.equal((await save).ok, false);
+  assert.equal(collection.isSaving, false);
+  assert.equal(collection.pendingValue('a'), undefined);
+  assert.deepEqual([...collection.collected], ['a']);
+});
+
+test('older catalogue imports invalidate undo for records only newer pages recognise', async () => {
+  const fixture = setup();
+  const newer = fixture.create();
+  const older = fixture.create({knownIds:new Set(['a'])});
+  const bulk = await newer.set(['b'], true);
+  older.refresh();
+  assert.equal((await older.replace(new Set(['b']), older.snapshot)).ok, true);
+  assert.equal((await newer.undo(bulk.changes)).restored, 0);
+  assert.deepEqual(JSON.parse(fixture.data.get('collected')), ['b']);
+});
+
+test('edits cannot grow a valid collection beyond the restorable backup size', async () => {
+  const overhead = serializeBackup(new Set([''])).length;
+  const futureId = 'x'.repeat(64 * 1024 - overhead);
+  const raw = JSON.stringify([futureId]);
+  const fixture = setup(raw);
+  const collection = fixture.create();
+  assert.equal((await collection.set(['a'], true)).ok, false);
+  assert.equal(fixture.data.get('collected'), raw);
+  assert.equal(collection.isSaving, false);
+  assert.match(fixture.errors[0], /64 KB/);
 });

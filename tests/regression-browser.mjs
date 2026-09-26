@@ -34,6 +34,7 @@ export async function testRegressionBrowser(browser) {
       await page.click('.creature-item .check-box');
       await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected") || "[]").length === 1');
       await page.click('#backupMenu summary');
+      await page.waitFor('!document.querySelector("#importBtn").disabled');
       await page.click('#importBtn');
       await page.evaluate(`(() => {
         const input = document.querySelector('#importFile');

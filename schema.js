@@ -15,3 +15,13 @@ export function shiftMonths(months) {
 export function monthsForHemisphere(item, hemisphere) {
   return hemisphere === 'south' ? item.southMonths : item.northMonths;
 }
+
+// A null month means any occurrence month; a specific month must use its own
+// season, including the six-month shift for southern islands.
+export function hoursForMonth(item, hemisphere, month = null) {
+  if (month === null) return item.hours;
+  const northMonth = hemisphere === 'south' ? (month + 5) % 12 + 1 : month;
+  if (!item.northMonths.includes(northMonth)) return [];
+  if (!item.northSeasons) return item.hours;
+  return item.northSeasons.find(season => season.months.includes(northMonth))?.hours || [];
+}

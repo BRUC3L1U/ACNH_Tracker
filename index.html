@@ -13,7 +13,7 @@
 body{font-family:var(--font-body);background:var(--color-bg);color:var(--color-text);min-height:100vh;font-size:14px;font-weight:500;line-height:1.6;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 
 button{font:inherit;cursor:pointer;touch-action:manipulation}
-button:disabled{cursor:not-allowed;opacity:.5}
+button:disabled,button[aria-disabled=true]{cursor:not-allowed;opacity:.5}
 button,a,summary{ -webkit-tap-highlight-color:transparent}
 button:active:not(:focus-visible):not(:disabled){transform:scale(.97)}
 

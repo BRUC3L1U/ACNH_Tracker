@@ -20,6 +20,16 @@ function monthsForHemisphere(item, hemisphere) {
   return hemisphere === 'south' ? item.southMonths : item.northMonths;
 }
 
+// A null month means any occurrence month; a specific month must use its own
+// season, including the six-month shift for southern islands.
+function hoursForMonth(item, hemisphere, month = null) {
+  if (month === null) return item.hours;
+  const northMonth = hemisphere === 'south' ? (month + 5) % 12 + 1 : month;
+  if (!item.northMonths.includes(northMonth)) return [];
+  if (!item.northSeasons) return item.hours;
+  return item.northSeasons.find(season => season.months.includes(northMonth))?.hours || [];
+}
+
 // Source: art-data.js
 // Names and comparison images: BWIKI art catalogue and forgery guide.
 // Identification notes checked against Future Press's official companion guide.
@@ -903,7 +913,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 200
   },
   {
@@ -923,7 +933,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "中",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 240
   },
   {
@@ -943,7 +953,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "稍大",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 4000
   },
   {
@@ -963,7 +973,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "特小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 1300
   },
   {
@@ -973,7 +983,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 4500
   },
   {
@@ -1003,7 +1013,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍大",
     northMonths: [8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 3750
   },
   {
@@ -1013,7 +1023,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍大",
     northMonths: [4,5,6,7,8,9,10],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 5000
   },
   {
@@ -1043,7 +1053,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 400
   },
   {
@@ -1063,7 +1073,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "稍大",
     northMonths: [5,6,7,8,9,10],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 800
   },
   {
@@ -1073,7 +1083,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "稍大",
     northMonths: [6,7,8],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 5500
   },
   {
@@ -1083,7 +1093,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 180
   },
   {
@@ -1154,6 +1164,10 @@ const FISH_DATA = [
     shadowSize: "中",
     northMonths: [3,4,5,6,9,10,11],
     hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23],
+    northSeasons: [
+      { months: [3,4,5,6], hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23] },
+      { months: [9,10,11], hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] }
+    ],
     price: 1000
   },
   {
@@ -1163,7 +1177,11 @@ const FISH_DATA = [
     location: "悬崖上",
     shadowSize: "中",
     northMonths: [3,4,5,6,9,10,11],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23],
+    northSeasons: [
+      { months: [3,4,5,6], hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23] },
+      { months: [9,10,11], hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] }
+    ],
     price: 3800
   },
   {
@@ -1173,7 +1191,7 @@ const FISH_DATA = [
     location: "悬崖上",
     shadowSize: "中",
     northMonths: [3,4,5,9,10,11],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 15000
   },
   {
@@ -1183,7 +1201,7 @@ const FISH_DATA = [
     location: "悬崖上",
     shadowSize: "大",
     northMonths: [1,2,3,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 15000
   },
   {
@@ -1213,7 +1231,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [9,10,11],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 2000
   },
   {
@@ -1223,7 +1241,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特小",
     northMonths: [4,5,6,7,8,9,10,11],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 1300
   },
   {
@@ -1233,7 +1251,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特小",
     northMonths: [5,6,7,8,9],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 1500
   },
   {
@@ -1243,7 +1261,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [5,6,7,8,9,10],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 3000
   },
   {
@@ -1253,7 +1271,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [5,6,7,8,9,10],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 2500
   },
   {
@@ -1263,7 +1281,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特小",
     northMonths: [4,5,6,7,8,9,10,11],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 500
   },
   {
@@ -1273,7 +1291,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特小",
     northMonths: [5,6,7,8,9,10],
-    hours: [9,10,11,12,13,14,15,16],
+    hours: [9,10,11,12,13,14,15],
     price: 800
   },
   {
@@ -1283,7 +1301,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍小",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,9,10,11,12,13,14,15,16,21,22,23],
+    hours: [0,1,2,3,9,10,11,12,13,14,15,21,22,23],
     price: 2500
   },
   {
@@ -1293,7 +1311,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍大",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 10000
   },
   {
@@ -1303,7 +1321,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "大",
     northMonths: [6,7,8,9],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 15000
   },
   {
@@ -1313,7 +1331,7 @@ const FISH_DATA = [
     location: "池塘",
     shadowSize: "大",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 6000
   },
   {
@@ -1323,7 +1341,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "特大",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 10000
   },
   {
@@ -1333,7 +1351,7 @@ const FISH_DATA = [
     location: "河流",
     shadowSize: "稍大",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 4000
   },
   {
@@ -1403,7 +1421,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "特大",
     northMonths: [7,8],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 10000
   },
   {
@@ -1423,7 +1441,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "中",
     northMonths: [1,2,11,12],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 5000
   },
   {
@@ -1443,7 +1461,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 200
   },
   {
@@ -1583,7 +1601,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "背鳍",
     northMonths: [7,8,9],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 4000
   },
   {
@@ -1593,7 +1611,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "大",
     northMonths: [8,9,10,11],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 3000
   },
   {
@@ -1603,7 +1621,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "背鳍",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 12000
   },
   {
@@ -1613,7 +1631,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "背鳍",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 8000
   },
   {
@@ -1653,7 +1671,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "稍大",
     northMonths: [1,2,3,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 2500
   },
   {
@@ -1673,7 +1691,7 @@ const FISH_DATA = [
     location: "大海",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 15000
   },
   {
@@ -1698,7 +1716,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 160
   },
   {
@@ -1709,7 +1727,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,9,10],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 160
   },
   {
@@ -1720,7 +1738,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 240
   },
   {
@@ -1731,7 +1749,7 @@ const BUG_DATA = [
     note: "飞行；异色花附近",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 2500
   },
   {
@@ -1742,7 +1760,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 300
   },
   {
@@ -1753,7 +1771,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 1000
   },
   {
@@ -1764,7 +1782,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "无限制",
     northMonths: [5,6,7,8],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
     price: 3000
   },
   {
@@ -1775,7 +1793,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [9,10,11],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16],
     price: 140
   },
   {
@@ -1786,7 +1804,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,6,7,8,9,12],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 4000
   },
   {
@@ -1797,7 +1815,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 3000
   },
   {
@@ -1808,7 +1826,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,4,5,6,7,8,9,12],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 2500
   },
   {
@@ -1819,7 +1837,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [5,6,7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16],
+    hours: [8,9,10,11,12,13,14,15],
     price: 4000
   },
   {
@@ -1830,7 +1848,7 @@ const BUG_DATA = [
     note: "户外灯光附近飞行",
     weather: "雨雪天除外",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,19,20,21,22,23],
+    hours: [0,1,2,3,19,20,21,22,23],
     price: 130
   },
   {
@@ -1840,7 +1858,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9],
-    hours: [0,1,2,3,4,19,20,21,22,23],
+    hours: [0,1,2,3,19,20,21,22,23],
     price: 3000
   },
   {
@@ -1851,7 +1869,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16],
+    hours: [8,9,10,11,12,13,14,15],
     price: 2500
   },
   {
@@ -1862,7 +1880,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9,10,11],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 200
   },
   {
@@ -1873,7 +1891,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [8,9,10,11],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 600
   },
   {
@@ -1884,7 +1902,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [8,9,10,11],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 400
   },
   {
@@ -1895,7 +1913,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 160
   },
   {
@@ -1906,7 +1924,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [9,10,11],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 130
   },
   {
@@ -1917,7 +1935,7 @@ const BUG_DATA = [
     note: "地面跳跃",
     weather: "雨雪天除外",
     northMonths: [9,10],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 430
   },
   {
@@ -1928,7 +1946,7 @@ const BUG_DATA = [
     note: "会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9,10,11],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 430
   },
   {
@@ -1939,7 +1957,7 @@ const BUG_DATA = [
     note: "白色花；会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7,8,9,10,11],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 2400
   },
   {
@@ -1950,7 +1968,7 @@ const BUG_DATA = [
     note: "花丛附近飞行",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,7],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 200
   },
   {
@@ -1972,7 +1990,7 @@ const BUG_DATA = [
     note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 250
   },
   {
@@ -1983,7 +2001,7 @@ const BUG_DATA = [
     note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 300
   },
   {
@@ -1994,7 +2012,7 @@ const BUG_DATA = [
     note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 500
   },
   {
@@ -2005,7 +2023,7 @@ const BUG_DATA = [
     note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [8,9],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 400
   },
   {
@@ -2016,7 +2034,7 @@ const BUG_DATA = [
     note: "除椰子和香蕉树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [4,5,6,7,8,16,17,18,19],
+    hours: [4,5,6,7,16,17,18],
     price: 550
   },
   {
@@ -2038,7 +2056,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [9,10],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 180
   },
   {
@@ -2049,7 +2067,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [4,5,6,7,8,9,10],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 230
   },
   {
@@ -2060,7 +2078,7 @@ const BUG_DATA = [
     note: "飞行",
     weather: "雨雪天除外",
     northMonths: [5,6,7,8,9,10],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 4500
   },
   {
@@ -2082,7 +2100,7 @@ const BUG_DATA = [
     note: "淡水附近飞行",
     weather: "雨雪天除外",
     northMonths: [6],
-    hours: [0,1,2,3,4,19,20,21,22,23],
+    hours: [0,1,2,3,19,20,21,22,23],
     price: 300
   },
   {
@@ -2104,7 +2122,7 @@ const BUG_DATA = [
     note: "池塘水面滑行",
     weather: "雪天除外",
     northMonths: [5,6,7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 130
   },
   {
@@ -2115,7 +2133,7 @@ const BUG_DATA = [
     note: "河流或池塘",
     weather: "无限制",
     northMonths: [5,6,7,8,9],
-    hours: [8,9,10,11,12,13,14,15,16,17,18,19],
+    hours: [8,9,10,11,12,13,14,15,16,17,18],
     price: 800
   },
   {
@@ -2126,7 +2144,7 @@ const BUG_DATA = [
     note: "河流或池塘",
     weather: "无限制",
     northMonths: [4,5,6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,19,20,21,22,23],
     price: 2000
   },
   {
@@ -2148,7 +2166,7 @@ const BUG_DATA = [
     note: "会逃走",
     weather: "无限制",
     northMonths: [3,4,5,6,7,8,9,10],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,19,20,21,22,23],
     price: 1000
   },
   {
@@ -2159,7 +2177,7 @@ const BUG_DATA = [
     note: "会逃走",
     weather: "雨雪天除外",
     northMonths: [3,4,5,6,10],
-    hours: [8,9,10,11,12,13,14,15,16,17],
+    hours: [8,9,10,11,12,13,14,15,16],
     price: 200
   },
   {
@@ -2252,7 +2270,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,23],
+    hours: [0,1,2,3,4,5,6,7,23],
     price: 10000
   },
   {
@@ -2272,7 +2290,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 8000
   },
   {
@@ -2302,7 +2320,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,23],
+    hours: [0,1,2,3,4,5,6,7,23],
     price: 10000
   },
   {
@@ -2312,7 +2330,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,19,20,21,22,23],
     price: 6000
   },
   {
@@ -2322,7 +2340,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 8000
   },
   {
@@ -2332,7 +2350,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 12000
   },
   {
@@ -2342,7 +2360,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 12000
   },
   {
@@ -2352,7 +2370,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 1350
   },
   {
@@ -2362,7 +2380,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 8000
   },
   {
@@ -2372,7 +2390,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 8000
   },
   {
@@ -2382,7 +2400,7 @@ const BUG_DATA = [
     location: "椰子树",
     weather: "无限制",
     northMonths: [7,8],
-    hours: [0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,17,18,19,20,21,22,23],
     price: 12000
   },
   {
@@ -2392,7 +2410,7 @@ const BUG_DATA = [
     location: "树干",
     weather: "无限制",
     northMonths: [7,8,9,10,11],
-    hours: [4,5,6,7,8,17,18,19],
+    hours: [4,5,6,7,17,18],
     price: 600
   },
   {
@@ -2436,7 +2454,7 @@ const BUG_DATA = [
     note: "平时像是个贝壳",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,19,20,21,22,23],
     price: 1000
   },
   {
@@ -2468,7 +2486,7 @@ const BUG_DATA = [
     note: "随机出现（飞到附近会有嗡嗡声）",
     weather: "雨雪天除外",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,17,18,19,20,21,22,23],
     price: 130
   },
   {
@@ -2501,7 +2519,7 @@ const BUG_DATA = [
     note: "敲击岩石",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,23],
+    hours: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,23],
     price: 250
   },
   {
@@ -2512,7 +2530,7 @@ const BUG_DATA = [
     note: "敲击岩石",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,9,10,11,12],
-    hours: [16,17,18,19,20,21,22,23],
+    hours: [16,17,18,19,20,21,22],
     price: 300
   },
   {
@@ -2523,7 +2541,7 @@ const BUG_DATA = [
     note: "摇晃或敲击垂下",
     weather: "无限制",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,19,20,21,22,23],
     price: 600
   },
   {
@@ -2534,7 +2552,7 @@ const BUG_DATA = [
     note: "地面爬行；靠近会主动攻击",
     weather: "无限制",
     northMonths: [1,2,3,4,11,12],
-    hours: [0,1,2,3,4,19,20,21,22,23],
+    hours: [0,1,2,3,19,20,21,22,23],
     price: 8000
   },
   {
@@ -2545,7 +2563,7 @@ const BUG_DATA = [
     note: "地面爬行；靠近会主动攻击",
     weather: "无限制",
     northMonths: [5,6,7,8,9,10],
-    hours: [0,1,2,3,4,19,20,21,22,23],
+    hours: [0,1,2,3,19,20,21,22,23],
     price: 8000
   }
 ];
@@ -2588,7 +2606,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍小",
     northMonths: [1,2,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 10000
   },
   {
@@ -2618,7 +2636,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [5,6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 2000
   },
   {
@@ -2718,7 +2736,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [1,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 2000
   },
   {
@@ -2738,7 +2756,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [3,4,5,6,9,10,11],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 1800
   },
   {
@@ -2768,7 +2786,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [5,6,7,8],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 10000
   },
   {
@@ -2778,7 +2796,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "特小",
     northMonths: [3,4,5,6],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 1400
   },
   {
@@ -2848,7 +2866,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍小",
     northMonths: [6,7,8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 3000
   },
   {
@@ -2858,7 +2876,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍小",
     northMonths: [1,2,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 1400
   },
   {
@@ -2868,7 +2886,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍小",
     northMonths: [1,2,3,4,5,6,7,8,9,10,11,12],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 2500
   },
   {
@@ -2878,7 +2896,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍大",
     northMonths: [10,11,12],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 5000
   },
   {
@@ -2898,7 +2916,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [7,8,9,10],
-    hours: [0,1,2,3,4,9,10,11,12,13,14,15,16,21,22,23],
+    hours: [0,1,2,3,9,10,11,12,13,14,15,21,22,23],
     price: 12000
   },
   {
@@ -2908,7 +2926,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "中",
     northMonths: [7,8,9],
-    hours: [0,1,2,3,4,21,22,23],
+    hours: [0,1,2,3,21,22,23],
     price: 2500
   },
   {
@@ -2928,7 +2946,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "稍小",
     northMonths: [5,6,7,8,9,10],
-    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],
+    hours: [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
     price: 1100
   },
   {
@@ -2938,7 +2956,7 @@ const SEA_DATA = [
     location: "海洋底部",
     shadowSize: "特小",
     northMonths: [8,9],
-    hours: [0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23],
+    hours: [0,1,2,3,4,5,6,7,8,16,17,18,19,20,21,22,23],
     price: 700
   },
   {
@@ -3247,7 +3265,7 @@ function normalizeCollected(value, knownIds) {
 }
 
 function serializeBackup(collected) {
-  return JSON.stringify({ version: BACKUP_VERSION, collected: [...collected] }, null, 2);
+  return JSON.stringify({ version: BACKUP_VERSION, collected: [...collected] });
 }
 
 function validateImportFileSize(size) {
@@ -3256,6 +3274,7 @@ function validateImportFileSize(size) {
 }
 
 function parseBackup(text, knownIds) {
+  validateImportFileSize(new TextEncoder().encode(text).byteLength);
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -3275,12 +3294,14 @@ function parseBackup(text, knownIds) {
   if (!Array.isArray(values) || !values.every(id => typeof id === 'string')) {
     throw new Error('收集记录必须是字符串数组');
   }
-  if (values.length > knownIds.size) throw new Error('收集记录数量超出上限');
-
-  const incoming = new Set(values.filter(id => knownIds.has(id)));
-  const dropped = new Set(values).size - incoming.size;
-  if (values.length > 0 && incoming.size === 0) throw new Error('文件中没有可识别的收集记录');
-  return { collected: incoming, dropped, legacy };
+  // IDs are opaque strings, including entries added by newer catalogues.
+  // Bound the file size, not its count against this page's catalogue size.
+  const incoming = new Set(values);
+  // Legacy arrays gain a version envelope on export. Check that the exported
+  // form also fits so a successful import can always be restored again.
+  validateImportFileSize(new TextEncoder().encode(serializeBackup(incoming)).byteLength);
+  const unknown = [...incoming].filter(id => !knownIds.has(id)).length;
+  return { collected: incoming, unknown, legacy };
 }
 
 function setCollectedForIds(current, ids, add) {
@@ -3317,8 +3338,8 @@ function applyFilters(data, query) {
   }
   if (filters.hour != null) {
     items = filters.hour === 'all'
-      ? items.filter(item => item.hours.length === 24)
-      : items.filter(item => item.hours.includes(filters.hour));
+      ? items.filter(item => hoursForMonth(item, hemisphere, filters.month ?? null).length === 24)
+      : items.filter(item => hoursForMonth(item, hemisphere, filters.month ?? null).includes(filters.hour));
   }
   if (filters.status === 'collected') items = items.filter(item => collected.has(item.id));
   if (filters.status === 'uncollected') items = items.filter(item => !collected.has(item.id));
@@ -3370,6 +3391,16 @@ function getTimeRangeLabel(hours) {
   }).join(' / ');
 }
 
+function getAvailabilityLabel(item, hemisphere, month = null) {
+  if (!item.northSeasons || month !== null) {
+    return getTimeRangeLabel(hoursForMonth(item, hemisphere, month));
+  }
+  return item.northSeasons.map(season => {
+    const months = hemisphere === 'south' ? shiftMonths(season.months) : season.months;
+    return months.join('、') + '月：' + getTimeRangeLabel(season.hours);
+  }).join('；');
+}
+
 // Source: collection.js
 // All collection writers share one origin-scoped lock. Read inside the lock,
 // then apply the user's operation to that fresh snapshot, never to a stale tab.
@@ -3379,6 +3410,7 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
   let snapshot = null;
   let error = null;
   const revisionKey = key + ':revisions';
+  const pending = new Map();
 
   function readRevisions() {
     const result = storage.getItem(revisionKey);
@@ -3398,7 +3430,9 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
     if (!Array.isArray(parsed) || !parsed.every(id => typeof id === 'string')) {
       throw new Error('浏览器中的收集记录格式损坏');
     }
-    return { raw, collected: normalizeCollected(parsed, knownIds) };
+    // A newer catalogue may have saved IDs this page cannot display. Keep
+    // them through ordinary edits, exports and undo instead of deleting them.
+    return { raw, collected: new Set(parsed) };
   }
 
   function refresh(notify = true) {
@@ -3419,7 +3453,10 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
     if (notify && (snapshot !== previousSnapshot || loadFailed !== previouslyFailed)) onChange();
   }
 
-  async function transact(operation, expected) {
+  async function transact(operation, expected, pendingValues = new Map()) {
+    const ticket = Symbol();
+    pending.set(ticket, pendingValues);
+    onChange();
     try {
       if (!locks?.request) throw new Error('当前浏览器不支持安全保存，请使用新版 Edge、Chrome 或 Safari，并通过 HTTPS、本地服务或直接打开文件使用');
       return await locks.request(key + ':write', () => {
@@ -3441,13 +3478,15 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
         }
         const revisions = readRevisions();
         const result = operation(latest, revisions);
+        validateImportFileSize(new TextEncoder().encode(serializeBackup(result.next)).byteLength);
         const raw = JSON.stringify([...result.next]);
-        const changed = [...knownIds].filter(id => expected !== undefined || latest.has(id) !== result.next.has(id));
+        const changed = expected !== undefined
+          ? [...new Set([...knownIds, ...Object.keys(revisions), ...result.next])]
+          : [...knownIds].filter(id => latest.has(id) !== result.next.has(id));
         if (changed.length) {
           const revision = crypto.randomUUID();
-          const nextRevisions = Object.fromEntries([...knownIds]
-            .filter(id => typeof revisions[id] === 'string')
-            .map(id => [id, revisions[id]]));
+          const nextRevisions = Object.fromEntries(Object.entries(revisions)
+            .filter(([, value]) => typeof value === 'string'));
           for (const id of changed) nextRevisions[id] = revision;
           // Invalidate old undo before changing data. If the data write fails,
           // an undo may become stale, but it can never overwrite a later edit.
@@ -3463,14 +3502,15 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
         loadFailed = false;
         error = null;
         try { clearLegacy?.(); } catch {}
-        onChange();
         return { ...result, ok: true };
       });
     } catch (cause) {
       refresh(false);
-      onChange();
       onError(cause.message || '浏览器阻止了本地存储，当前更改无法保存');
       return { ok: false };
+    } finally {
+      pending.delete(ticket);
+      onChange();
     }
   }
 
@@ -3478,6 +3518,12 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
   return {
     get collected() { return collected; },
     get loadFailed() { return loadFailed; },
+    get isSaving() { return pending.size > 0; },
+    pendingValue(id) {
+      let value;
+      for (const values of pending.values()) if (values.has(id)) value = values.get(id);
+      return value;
+    },
     get snapshot() {
       const revisions = storage.getItem(revisionKey);
       if (!revisions.ok) throw revisions.error;
@@ -3485,7 +3531,11 @@ function createCollectionController({ storage, key, knownIds, locks, readLegacy,
     },
     get error() { return error; },
     refresh,
-    set(ids, add) { return transact(current => setCollectedForIds(current, ids, add)); },
+    set(ids, add) {
+      const editableIds = ids.filter(id => knownIds.has(id));
+      return transact(current => setCollectedForIds(current, editableIds, add), undefined,
+        new Map(editableIds.map(id => [id, add])));
+    },
     undo(changes) {
       return transact((current, revisions) => undoCollectedChanges(current,
         changes.filter(change => typeof change.revision === 'string' && revisions[change.id] === change.revision)));
@@ -3499,6 +3549,10 @@ function createBackupActions(collection, knownIds) {
   let importInProgress = false;
 
   function exportCollected() {
+    if (collection.isSaving) {
+      showToast('正在保存，请稍后再导出');
+      return;
+    }
     collection.refresh();
     if (!getCollectionAccess(collection.loadFailed).canExport) {
       showToast('未能加载已有收集记录，已暂停导出；可导入有效备份恢复');
@@ -3521,12 +3575,17 @@ function createBackupActions(collection, knownIds) {
     const input = event.target;
     const file = input.files[0];
     if (!file || importInProgress) return;
+    if (collection.isSaving) {
+      input.value = '';
+      showToast('正在保存，请稍后再导入');
+      return;
+    }
     const returnFocus = rememberFocus(document.getElementById('importBtn'));
     importInProgress = true;
     document.getElementById('importBtn').disabled = true;
     try {
       validateImportFileSize(file.size);
-      const { collected: incoming, dropped } = parseBackup(await file.text(), knownIds);
+      const { collected: incoming, unknown } = parseBackup(await file.text(), knownIds);
       collection.refresh();
       const expected = collection.snapshot;
       if (collection.collected.size > 0 || collection.loadFailed) {
@@ -3536,7 +3595,7 @@ function createBackupActions(collection, knownIds) {
         if (!await confirmDialog(message, '覆盖导入')) return;
       }
       if ((await collection.replace(incoming, expected)).ok) {
-        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (dropped > 0 ? '（已忽略 ' + dropped + ' 条无法识别的记录）' : ''));
+        showToast('导入成功，共 ' + incoming.size + ' 条记录' + (unknown > 0 ? '（其中 ' + unknown + ' 条当前图鉴尚未收录，已保留）' : ''));
       }
     } catch (error) {
       showToast('导入失败：' + error.message);
@@ -3566,6 +3625,7 @@ function createImageFrame(url, alt, className, errorClass, size = {}) {
   let automaticRetries = 0;
 
   function load() {
+    const hadFocus = frame.contains(document.activeElement);
     delete frame.dataset.imageFailed;
     const image = document.createElement('img');
     image.alt = alt;
@@ -3589,12 +3649,7 @@ function createImageFrame(url, alt, className, errorClass, size = {}) {
         // Retry is separate from the image label and original-image link.
         event.preventDefault();
         event.stopPropagation();
-        const hadFocus = document.activeElement === retry;
         load();
-        if (hadFocus) {
-          frame.tabIndex = -1;
-          frame.focus({ preventScroll: true });
-        }
       });
       fallback.append(message, retry);
       frame.replaceChildren(fallback);
@@ -3614,6 +3669,10 @@ function createImageFrame(url, alt, className, errorClass, size = {}) {
       label.appendChild(image);
       frame.replaceChildren(label);
     } else frame.replaceChildren(image);
+    if (hadFocus) {
+      frame.tabIndex = -1;
+      frame.focus({ preventScroll: true });
+    }
   }
 
   retries.set(frame, () => {
@@ -3669,7 +3728,7 @@ function buildArtRow(item) {
 }
 
 // Source: list-view.js
-function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
+function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving, pendingValue }) {
   const CONFIG = { MONTHS: 12, SORT_KEYS: sortKeys };
   const getLocalTime = () => new Date();
   // Header and rows live in their own persistent containers so a re-render can
@@ -3722,7 +3781,7 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
     // grid was ~4800 elements for an 80-row list and dominated both the HTML
     // payload and layout cost.
     html += '</span><span class="meta-row"><span class="meta-label">时:</span><span class="meta-hours">'
-      + getTimeRangeLabel(item.hours) + '</span></span></label>';
+      + getAvailabilityLabel(item, state.hemisphere, state.filters[tab].month) + '</span></span></label>';
 
     const el = document.createElement('div');
     el.className = 'creature-item creature-row';
@@ -3735,6 +3794,9 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
 
   function renderListHeader(count) {
     const editDisabled = getCollectionAccess(isLoadFailed()).canEdit ? '' : ' disabled';
+    // Keep the initiating bulk button focusable while the write is pending.
+    // The delegated handler ignores repeated activation until saving ends.
+    const busyAttribute = ' aria-disabled="'+isSaving()+'"';
     let html = '';
     CONFIG.SORT_KEYS.filter(sk => state.activeTab !== 'art' || sk.key !== 'price').forEach(sk => {
       const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
@@ -3743,18 +3805,17 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
+    html += '<span class="save-status" role="status">'+(isSaving() ? '正在保存…' : '')+'</span>';
     document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
-    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+'>全标</button>';
-    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+'>全取消</button></span>';
+    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+busyAttribute+'>全标</button>';
+    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
   }
 
   function renderList() {
     const canEdit = getCollectionAccess(isLoadFailed()).canEdit;
     const focusedRowElement = document.getElementById('listRows').contains(document.activeElement) ? document.activeElement : null;
-    const focusedId = document.activeElement?.classList.contains('creature-checkbox')
-      ? document.activeElement.dataset.id
-      : null;
+    const focusedId = focusedRowElement?.closest('.creature-item')?.dataset.id;
     const focusedSort = document.activeElement?.classList.contains('sort-btn')
       ? document.activeElement.dataset.sort
       : null;
@@ -3776,7 +3837,7 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
 
     const northern = state.hemisphere === 'north';
     const curMon = getLocalTime().getMonth() + 1;
-    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon;
+    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon + '|' + state.filters[tab].month;
     if (sig !== rowCacheSig) {
       rowCache.clear();
       rowCacheSig = sig;
@@ -3791,7 +3852,9 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
         el = tab === 'art' ? buildArtRow(item) : buildRow(item, tab, northern, curMon);
         rowCache.set(item.id, el);
       }
-      const collected = state.collected.has(item.id);
+      const pending = pendingValue(item.id);
+      const collected = pending === undefined ? state.collected.has(item.id) : pending;
+      el.setAttribute('aria-busy', pending !== undefined);
       el.classList.toggle('collected', collected);
       const checkbox = el.querySelector('.creature-checkbox');
       checkbox.checked = collected;
@@ -3799,14 +3862,15 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys }) {
       frag.appendChild(el);
     }
     rows.replaceChildren(frag);
-    if (focusedId) {
+    if (focusedRowElement?.isConnected && !focusedRowElement.disabled) {
+      focusedRowElement.focus({ preventScroll: true });
+    } else if (focusedId) {
       const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
         || rows.querySelectorAll('.creature-checkbox')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
       next?.focus({ preventScroll: true });
     }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
     else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
-    else if (focusedRowElement?.isConnected) focusedRowElement.focus();
   }
 
   return { render: renderList, get filtered() { return lastFiltered; } };
@@ -3884,8 +3948,8 @@ function bindHemisphereButtons(root){
 // app.js having run, which leaks into anything else reading that data.
 const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
 
-// Collected ids are only meaningful if they match a real creature: imports
-// are validated against this set so junk ids can't squat in storage forever.
+// Only current catalogue IDs contribute to progress; unknown IDs remain in
+// storage and backups so an older page cannot erase a newer catalogue.
 const KNOWN_IDS = new Set(ALL_DATA.map(x => x.item.id));
 
 const collection = createCollectionController({
@@ -3971,12 +4035,11 @@ function saveHemisphere(next) {
 
 function getLocalTime() { return new Date(); }
 
-function isAvailableNow(item) {
-  const now = getLocalTime();
+function isAvailableNow(item, now = getLocalTime()) {
   const month = now.getMonth() + 1;
   const hour = now.getHours();
   const months = monthsForHemisphere(item, state.hemisphere);
-  return months.includes(month) && item.hours.includes(hour);
+  return months.includes(month) && hoursForMonth(item, state.hemisphere, month).includes(hour);
 }
 
 function filteredItems(tab) {
@@ -4020,7 +4083,7 @@ function renderTodayPanel() {
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
 
-  let nowAvailable = ALL_DATA.filter(x => TAB_DEFINITIONS[x.type].seasonal && isAvailableNow(x.item));
+  let nowAvailable = ALL_DATA.filter(x => TAB_DEFINITIONS[x.type].seasonal && isAvailableNow(x.item, now));
   if (state.todayUncollectedOnly) {
     nowAvailable = nowAvailable.filter(x => !state.collected.has(x.item.id));
   }
@@ -4030,7 +4093,7 @@ function renderTodayPanel() {
   ]));
 
   function todayRow(item, tags){
-    const timeLabel = getTimeRangeLabel(item.hours);
+    const timeLabel = getTimeRangeLabel(hoursForMonth(item, state.hemisphere, now.getMonth() + 1));
     const note = item.note ? '<span class="note">'+escapeHtml(item.note)+'</span>' : '';
     return '<div class="today-item"><span style="font-weight:600;min-width:80px">'
       + escapeHtml(item.name) + '</span>' + tags + note
@@ -4302,13 +4365,15 @@ document.getElementById('filterBar').addEventListener('click', e => {
 });
 
 const listView = createListView({
-  state, filteredItems, isLoadFailed: () => collection.loadFailed, sortKeys: CONFIG.SORT_KEYS
+  state, filteredItems, isLoadFailed: () => collection.loadFailed, sortKeys: CONFIG.SORT_KEYS,
+  isSaving: () => collection.isSaving, pendingValue: id => collection.pendingValue(id)
 });
 function renderList() { listView.render(); }
 
 // Bulk actions record only ids whose state actually changed. Undo restores an
 // id only while it still has the bulk result, so a later single-row edit wins.
 async function bulkSetCollected(add) {
+  if (collection.isSaving) return;
   if (listView.filtered.length === 0) return;
   const verb = add ? '标记' : '取消标记';
   const result = await collection.set(listView.filtered.map(x => x.id), add);
@@ -4377,8 +4442,8 @@ function renderDataBar() {
   document.getElementById('dataBar').innerHTML =
     '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary id="backupToggle">备份</summary><div class="backup-actions">' +
     (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
-    '<button type="button" class="data-btn" id="exportBtn"'+(access.canExport?'':' disabled aria-describedby="storageModeNote"')+'>导出收集记录</button>' +
-    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress?' disabled':'')+'>导入收集记录</button>' +
+    '<button type="button" class="data-btn" id="exportBtn"'+(!access.canExport?' disabled aria-describedby="storageModeNote"':collection.isSaving?' disabled':'')+'>导出收集记录</button>' +
+    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress || collection.isSaving?' disabled':'')+'>导入收集记录</button>' +
     '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
   document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
