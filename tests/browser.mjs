@@ -20,8 +20,26 @@ try {
   const ids = await a.evaluate('[...document.querySelectorAll(".creature-checkbox")].slice(0,2).map(x=>x.dataset.id)');
   assert.equal(ids.length, 2);
   const click = (page, id) => page.click('.creature-item[data-id="' + id + '"] .check-box');
+  for (const page of [a, b]) await page.evaluate(`window.concurrentInputEvents = [];
+    for (const type of ['mousedown', 'mouseup', 'click', 'change']) {
+      document.addEventListener(type, event => concurrentInputEvents.push({
+        type, id: event.target.closest('.creature-item')?.dataset.id
+      }), true);
+    }`);
   await Promise.all([click(a, ids[0]), click(b, ids[1])]);
-  await a.waitFor('JSON.parse(localStorage.getItem("acnh_collected") || "[]").length === 2');
+  try {
+    await a.waitFor('JSON.parse(localStorage.getItem("acnh_collected") || "[]").length === 2');
+  } catch (error) {
+    for (const [name, page] of [['a', a], ['b', b]]) {
+      console.error('Concurrent input diagnostics', name, await page.evaluate(`({
+        events: concurrentInputEvents,
+        collected: localStorage.getItem('acnh_collected'),
+        checked: [...document.querySelectorAll('.creature-checkbox:checked')].map(el => el.dataset.id),
+        message: document.querySelector('#toast').textContent
+      })`));
+    }
+    throw error;
+  }
   await a.waitFor('document.querySelectorAll(".creature-checkbox:checked").length === 2');
   await b.waitFor('document.querySelectorAll(".creature-checkbox:checked").length === 2');
   await a.reload();
