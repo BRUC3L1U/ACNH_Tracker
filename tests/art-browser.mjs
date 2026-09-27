@@ -13,7 +13,7 @@ export async function testArtBrowser(browser) {
   assert.equal(await page.evaluate('document.querySelectorAll("#filterBar [data-hemi], #monthGrid, #hourGrid").length'), 0);
   assert.equal(await page.evaluate('document.querySelectorAll("#listHeader [data-sort=price]").length'), 0);
   assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /0 \/ 43/);
-  assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /3 \/ 243/);
+  assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /3 \/ 350/);
   console.log('PASS art tab migrates existing state and excludes seasonal controls');
 
   await page.click('#filterToggle');

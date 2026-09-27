@@ -29,9 +29,10 @@ test('data schema and hemisphere derivation stay consistent', () => {
     fish: 80,
     bug: 80,
     sea: 40,
-    art: 43
+    art: 43,
+    music: 107
   });
-  assert.equal(knownIds.size, 243);
+  assert.equal(knownIds.size, 350);
   for (const item of CREATURE_TABS.flatMap(tab => DATA_MAP[tab])) {
     assert.match(item.id, /^(fish|bug|sea)_\d{3}$/);
     assert.ok(item.name);

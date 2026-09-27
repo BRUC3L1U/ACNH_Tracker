@@ -59,7 +59,7 @@ export async function testAuditBrowser(browser) {
       input.dispatchEvent(new Event('change', {bubbles:true}));
     })()`);
     await page.waitFor('document.querySelector("#toast")?.textContent.includes("尚未收录，已保留")');
-    assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /1 \/ 243/);
+    assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'), /1 \/ 350/);
     await page.click('[data-id="fish_002"] .check-box');
     await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).length === 3');
     await page.waitFor('!document.querySelector("#exportBtn").disabled');

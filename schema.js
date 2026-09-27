@@ -2,7 +2,8 @@ export const TAB_DEFINITIONS = Object.freeze({
   bug: Object.freeze({ label: '虫', seasonal: true, filters: Object.freeze(['location', 'weather']) }),
   fish: Object.freeze({ label: '鱼', seasonal: true, filters: Object.freeze(['location', 'shadowSize']) }),
   sea: Object.freeze({ label: '海洋生物', seasonal: true, filters: Object.freeze(['shadowSize']) }),
-  art: Object.freeze({ label: '艺术品', seasonal: false, filters: Object.freeze(['artType', 'authenticity']) })
+  art: Object.freeze({ label: '艺术品', seasonal: false, filters: Object.freeze(['artType', 'authenticity']) }),
+  music: Object.freeze({ label: '唱片', seasonal: false, filters: Object.freeze(['acquisition']) })
 });
 
 export const TABS = Object.freeze(Object.keys(TAB_DEFINITIONS));

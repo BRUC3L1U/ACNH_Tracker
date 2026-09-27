@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+
+export async function testMusicBrowser(browser) {
+  const page = await browser.page();
+  await page.blockUrls(['*patchwiki.biligame.com*','*animalcrossingwiki.de*']);
+  await page.evaluate(`localStorage.clear();localStorage.setItem('acnh_collected','["fish_001","art_001"]');localStorage.setItem('acnh_ui',JSON.stringify({activeTab:'fish',filters:{fish:{month:9,hour:7,hourManual:true}},sort:{key:'price',dir:'desc'}}))`);
+  await page.reload();
+  await page.click('[data-tab="music"]');
+  assert.equal(await page.evaluate('document.querySelectorAll(".music-item").length'),107);
+  assert.equal(await page.evaluate('document.querySelector("#todayPanel").hidden'),true);
+  assert.equal(await page.evaluate('document.querySelectorAll("#filterBar [data-hemi],#monthGrid,#hourGrid,#listHeader [data-sort=price]").length'),0);
+  assert.match(await page.evaluate('document.querySelector("#progressSection").textContent'),/2 \/ 350/);
+  await page.click('#filterToggle');
+  await page.click('[data-filter="acquisition"][data-value="Nook购物"]');
+  assert.equal(await page.evaluate('document.querySelectorAll(".music-item").length'),102);
+  await page.click('.music-item .check-box');
+  await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).includes("music_001")');
+  await page.reload();
+  assert.equal(await page.evaluate('document.querySelectorAll(".music-item input:checked").length'),1);
+  await page.click('[data-filter="status"][data-value="uncollected"]');
+  await page.click('#markAllVisible');
+  await page.waitFor('document.querySelectorAll(".music-item").length === 0 && !!document.querySelector(".toast-action")');
+  await page.click('.toast-action');
+  await page.waitFor('document.querySelectorAll(".music-item").length === 101');
+  await page.click('#filterReset');
+  await page.click('[data-filter="acquisition"][data-value="隐藏点播"]');
+  assert.equal(await page.evaluate('document.querySelectorAll(".music-item").length'),3);
+  await page.click('.music-details summary');
+  assert.match(await page.evaluate('document.querySelector(".music-details[open]").textContent'),/准确输入/);
+  assert.equal(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected")).length'),3);
+  await page.evaluate('document.querySelector(".music-item input").focus()');
+  await page.press('Space');
+  await page.waitFor('document.activeElement.checked && JSON.parse(localStorage.getItem("acnh_collected")).length === 4');
+  assert.equal(await page.evaluate('document.querySelector(".music-details").open'),true);
+  await page.waitFor('!!document.querySelector(".music-cover .image-retry")');
+  const before = await page.evaluate('localStorage.getItem("acnh_collected")');
+  await page.click('.music-cover .image-retry');
+  assert.equal(await page.evaluate('localStorage.getItem("acnh_collected")'),before);
+  await page.click('#filterReset');
+  await page.click('#filterShowResults');
+  for (const width of [320,375,768,1280]) {
+    await page.setViewport(width);
+    assert.equal(await page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'),true,'music overflow '+width);
+    await page.click('[data-tab="art"]');
+    await page.click('[data-tab="music"]');
+  }
+  await page.evaluate(`window.NativeDate = Date; window.Date = class extends window.NativeDate {constructor(...args){super(...(args.length ? args : ['2026-12-31T23:00:00']));}};Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));`);
+  assert.equal(await page.evaluate('document.querySelectorAll(".music-item").length'),107);
+  await page.click('[data-tab="fish"]');
+  assert.equal(await page.evaluate('document.querySelector("#todayPanel").hidden'),false);
+  assert.equal(await page.evaluate('JSON.parse(localStorage.getItem("acnh_ui")).filters.fish.hour'),7);
+  await page.click('#backupMenu summary');
+  await page.evaluate(`window.savedCreate = URL.createObjectURL; window.savedClick = HTMLAnchorElement.prototype.click; URL.createObjectURL = blob => {window.exportText = blob.text();return window.savedCreate(blob)};HTMLAnchorElement.prototype.click = function() {};`);
+  await page.click('#exportBtn');
+  const exported = await page.evaluate('(async () => JSON.parse(await window.exportText))()');
+  assert.ok(exported.collected.includes('music_001') && exported.collected.includes('art_001') && exported.collected.includes('fish_001'));
+  await page.evaluate(`URL.createObjectURL = window.savedCreate;HTMLAnchorElement.prototype.click = window.savedClick;const transfer = new DataTransfer();transfer.items.add(new File(['{"version":1,"collected":["music_107","art_043","fish_001"]}'],'mixed.json',{type:'application/json'}));const input = document.querySelector('#importFile');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));`);
+  await page.waitFor('!!document.querySelector(".modal-overlay.show")');
+  await page.click('[data-r="ok"]');
+  await page.waitFor('!document.querySelector(".modal-overlay") && !document.querySelector("#importBtn").disabled');
+  await page.reload();
+  await page.click('[data-tab="music"]');
+  assert.equal(await page.evaluate('document.querySelector("[data-id=music_107] input").checked'),true);
+  assert.deepEqual(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected"))'),['music_107','art_043','fish_001']);
+  await page.close();
+  console.log('PASS music filters, persistence, bulk undo, keyboard, details, image retry, clock and responsive navigation');
+}

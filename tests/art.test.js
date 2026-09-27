@@ -59,11 +59,11 @@ test('old UI state gains art filters without changing creature choices or today 
   assert.deepEqual(restored.filters.art, { status: 'all', artType: ['雕塑'], authenticity: ['仅真品'] });
 });
 
-test('legacy and mixed collection backups survive expansion to 243 records', () => {
+test('legacy and mixed collection backups survive expansion to 350 records', () => {
   assert.deepEqual([...parseBackup('["fish_001","bug_001","sea_001"]', knownIds).collected], ['fish_001','bug_001','sea_001']);
   const mixed = new Set(['fish_001','art_001','art_043']);
   assert.deepEqual(parseBackup(serializeBackup(mixed), knownIds).collected, mixed);
   const full = parseBackup(serializeBackup(knownIds), knownIds);
-  assert.equal(full.collected.size, 243);
+  assert.equal(full.collected.size, 350);
   assert.equal(full.unknown, 0);
 });

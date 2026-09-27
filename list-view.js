@@ -1,6 +1,7 @@
-import { monthsForHemisphere } from './schema.js';
+import { TAB_DEFINITIONS, monthsForHemisphere } from './schema.js';
 import { getCollectionAccess, getAvailabilityLabel } from './core.js';
 import { escapeHtml } from './ui.js';
+import { buildMusicRow } from './music-view.js';
 import { buildArtRow } from './art-view.js';
 import { createImageFrame } from './image-view.js';
 
@@ -74,7 +75,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
     // The delegated handler ignores repeated activation until saving ends.
     const busyAttribute = ' aria-disabled="'+isSaving()+'"';
     let html = '';
-    CONFIG.SORT_KEYS.filter(sk => state.activeTab !== 'art' || sk.key !== 'price').forEach(sk => {
+    CONFIG.SORT_KEYS.filter(sk => TAB_DEFINITIONS[state.activeTab].seasonal || sk.key !== 'price').forEach(sk => {
       const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
       const active = state.sort.key === sk.key;
       const current = active ? '，当前'+(state.sort.dir==='asc'?'升序':'降序') : '';
@@ -113,7 +114,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
 
     const northern = state.hemisphere === 'north';
     const curMon = getLocalTime().getMonth() + 1;
-    const sig = tab === 'art' ? tab : tab + '|' + northern + '|' + curMon + '|' + state.filters[tab].month;
+    const sig = !TAB_DEFINITIONS[tab].seasonal ? tab : tab + '|' + northern + '|' + curMon + '|' + state.filters[tab].month;
     if (sig !== rowCacheSig) {
       rowCache.clear();
       rowCacheSig = sig;
@@ -125,7 +126,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
     for (const item of filtered) {
       let el = rowCache.get(item.id);
       if (!el) {
-        el = tab === 'art' ? buildArtRow(item) : buildRow(item, tab, northern, curMon);
+        el = tab === 'art' ? buildArtRow(item) : tab === 'music' ? buildMusicRow(item) : buildRow(item, tab, northern, curMon);
         rowCache.set(item.id, el);
       }
       const pending = pendingValue(item.id);

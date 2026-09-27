@@ -112,7 +112,7 @@ export async function testInteractionBrowser(browser) {
   await check('all phone categories, expanded filters and import dialog remain usable', async page => {
     for (const width of [320,375]) {
       await page.setViewport(width, 812);
-      for (const tab of ['fish','bug','sea','art']) {
+      for (const tab of ['fish','bug','sea','art','music']) {
         await page.click('[data-tab="'+tab+'"]');
         await page.click('#filterToggle');
         assert.equal(await page.evaluate('document.querySelector("#filterToggle").getAttribute("aria-expanded")'), 'true');
@@ -123,6 +123,7 @@ export async function testInteractionBrowser(browser) {
         await page.click('#filterToggle');
         assert.ok(await page.evaluate('document.querySelectorAll(".creature-item").length > 0'));
       }
+      await page.click('[data-tab="art"]');
       await page.click('.art-item .check-box');
       await page.waitFor('document.querySelector(".art-item input").checked');
       await page.click('#backupMenu summary');

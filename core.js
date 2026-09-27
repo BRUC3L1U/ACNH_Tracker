@@ -214,7 +214,7 @@ export function undoCollectedChanges(current, changes) {
 export function applyFilters(data, query) {
   const { filters, hemisphere, collected, sort } = query;
   let items = [...data];
-  for (const key of ['location', 'shadowSize', 'weather', 'artType', 'authenticity']) {
+  for (const key of ['location', 'shadowSize', 'weather', 'artType', 'authenticity', 'acquisition']) {
     if (filters[key]?.length) items = items.filter(item => filters[key].includes(item[key]));
   }
   if (filters.month != null) {

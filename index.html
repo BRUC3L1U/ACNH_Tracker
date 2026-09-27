@@ -135,6 +135,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .heat-cell.current{outline:2px solid var(--color-accent-warm);outline-offset:1px}
 .empty-state{padding:64px 24px;text-align:center;color:var(--color-text-muted);font-size:14px}
 
+.music-item{display:grid;grid-template-columns:24px 88px minmax(0,1fr);gap:18px;align-items:center}
+.music-cover{display:flex;width:88px;height:88px;background:#f0f1e8;border-radius:6px;overflow:hidden}
+.music-cover img{width:100%;height:100%;object-fit:contain}
+.music-info{min-width:0}
+.music-title{display:flex;flex-direction:column;gap:5px;cursor:pointer;overflow-wrap:anywhere}
+.music-english,.music-price{font-size:12px;color:var(--color-text-muted)}
+.music-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.music-details{font-size:12px;line-height:1.8}
+.music-details summary{padding:8px 0;min-height:40px;width:fit-content;cursor:pointer;color:var(--color-primary)}
+.music-details p{margin-top:6px}
 .art-item{display:block}
 .art-collect{display:grid;grid-template-columns:24px 88px minmax(0,1fr);align-items:center;gap:18px;cursor:pointer}
 .art-thumbnail-frame{display:flex;align-items:center;justify-content:center;width:88px;height:96px;background:#f0f1e8;border-radius:6px}
@@ -227,6 +237,8 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.creature-item:focus-
 .heat-cell{width:18px;height:22px}
 .meta-row{gap:2px}
 .meta-label{min-width:22px}
+.music-item{grid-template-columns:22px 64px minmax(0,1fr);gap:10px}
+.music-cover{width:64px;height:64px}
 .art-collect{grid-template-columns:22px 64px minmax(0,1fr);gap:10px}
 .art-thumbnail-frame{width:64px;height:80px}
 .art-title-line{gap:4px}

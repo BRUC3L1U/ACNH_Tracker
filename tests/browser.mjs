@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchBrowser } from './helpers/browser.mjs';
+import { testMusicBrowser } from './music-browser.mjs';
 import { testArtBrowser } from './art-browser.mjs';
 import { testRegressionBrowser } from './regression-browser.mjs';
 import { testInteractionBrowser } from './interaction-browser.mjs';
@@ -106,6 +107,7 @@ try {
   assert.equal(await filePage.evaluate('document.querySelectorAll(".creature-checkbox:checked").length'), 1);
   console.log('PASS direct file opening, safe saving and reload persistence');
   await testArtBrowser(browser);
+  await testMusicBrowser(browser);
   await testInteractionBrowser(browser);
   await testRegressionBrowser(browser);
   await testAuditBrowser(browser);

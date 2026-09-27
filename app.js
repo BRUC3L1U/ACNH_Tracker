@@ -184,7 +184,7 @@ function filteredItems(tab) {
     filters: state.filters[tab],
     hemisphere: state.hemisphere,
     collected: state.collected,
-    sort: tab === 'art' && state.sort.key === 'price' ? { key: null, dir: 'asc' } : state.sort
+    sort: !TAB_DEFINITIONS[tab].seasonal && state.sort.key === 'price' ? { key: null, dir: 'asc' } : state.sort
   });
 }
 
@@ -213,9 +213,9 @@ function renderProgress() {
 function renderTodayPanel() {
   const panel = document.getElementById('todayPanel');
   const returnFocus = rememberFocus(panel.contains(document.activeElement) ? document.activeElement : null);
-  const showArt = state.activeTab === 'art';
-  document.getElementById('todayPanel').hidden = showArt;
-  if (showArt) return;
+  const seasonal = TAB_DEFINITIONS[state.activeTab].seasonal;
+  panel.hidden = !seasonal;
+  if (!seasonal) return;
   const now = getLocalTime();
   const hour = now.getHours();
   const monStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
@@ -342,7 +342,7 @@ function renderFilters() {
   }
   html += '</div></div>';
 
-  for (const [key, label] of [['artType', '艺术类型'], ['authenticity', '真伪情况']]) {
+  for (const [key, label] of [['artType', '艺术类型'], ['authenticity', '真伪情况'], ['acquisition', '获取方式']]) {
     if (!definition.filters.includes(key)) continue;
     html += '<div class="filter-row"><span class="filter-label">'+label+'</span><div class="filter-options">';
     for (const value of getFilterOptions(DATA_MAP, tab, key)) {
