@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { launchBrowser } from './helpers/browser.mjs';
+import { testVillagerBrowser } from './villager-browser.mjs';
 import { testMusicBrowser } from './music-browser.mjs';
 import { testArtBrowser } from './art-browser.mjs';
 import { testRegressionBrowser } from './regression-browser.mjs';
@@ -126,6 +127,7 @@ try {
   console.log('PASS direct file opening, safe saving and reload persistence');
   await testArtBrowser(browser);
   await testMusicBrowser(browser);
+  await testVillagerBrowser(browser);
   await testInteractionBrowser(browser);
   await testRegressionBrowser(browser);
   await testAuditBrowser(browser);

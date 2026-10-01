@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { DATA_MAP } from '../data.js';
-import { CREATURE_TABS, monthsForHemisphere, shiftMonths } from '../schema.js';
+import { COLLECTIBLE_TABS, CREATURE_TABS, monthsForHemisphere, shiftMonths } from '../schema.js';
 import { escapeHtml } from '../ui.js';
 import {
   applyFilters,
@@ -17,7 +17,7 @@ import {
   validateImportFileSize
 } from '../core.js';
 
-const all = Object.values(DATA_MAP).flat();
+const all = COLLECTIBLE_TABS.flatMap(tab => DATA_MAP[tab]);
 const knownIds = new Set(all.map(item => item.id));
 
 test('HTML escaping protects generated labels and attributes', () => {
@@ -30,7 +30,8 @@ test('data schema and hemisphere derivation stay consistent', () => {
     bug: 80,
     sea: 40,
     art: 43,
-    music: 107
+    music: 107,
+    villager: 417
   });
   assert.equal(knownIds.size, 350);
   for (const item of CREATURE_TABS.flatMap(tab => DATA_MAP[tab])) {

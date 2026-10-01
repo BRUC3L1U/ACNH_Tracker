@@ -1,6 +1,7 @@
 import { shiftMonths } from './schema.js';
 import { MUSIC_DATA } from './music-data.js';
 import { ART_DATA } from './art-data.js';
+import { VILLAGER_DATA } from './villager-data.js';
 
 const FISH_DATA = [
   {
@@ -2090,5 +2091,6 @@ export const DATA_MAP = Object.freeze({
   bug: Object.freeze(withDerivedHemisphere(BUG_DATA)),
   sea: Object.freeze(withDerivedHemisphere(SEA_DATA)),
   art: ART_DATA,
-  music: MUSIC_DATA
+  music: MUSIC_DATA,
+  villager: VILLAGER_DATA
 });

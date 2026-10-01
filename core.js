@@ -40,14 +40,15 @@ export function makeFilters(tab, now = new Date()) {
   if (!definition) throw new Error('未知生物类别：' + tab);
   const filters = definition.seasonal
     ? { month: null, hour: now.getHours(), hourManual: false, status: 'all' }
-    : { status: 'all' };
+    : definition.collectible === false ? {} : { status: 'all' };
   for (const key of definition.filters) filters[key] = [];
   return filters;
 }
 
 export function getFilterOptions(dataMap, tab, key) {
   if (!TAB_DEFINITIONS[tab]?.filters.includes(key)) return [];
-  return [...new Set(dataMap[tab].map(item => item[key]).filter(Boolean))];
+  const options = [...new Set(dataMap[tab].map(item => item[key]).filter(Boolean))];
+  return key === 'birthdayMonth' ? options.sort((a, b) => parseInt(a) - parseInt(b)) : options;
 }
 
 function migrateFilterArray(tab, key, values, allowedValues) {
@@ -214,7 +215,7 @@ export function undoCollectedChanges(current, changes) {
 export function applyFilters(data, query) {
   const { filters, hemisphere, collected, sort } = query;
   let items = [...data];
-  for (const key of ['location', 'shadowSize', 'weather', 'artType', 'authenticity', 'acquisition']) {
+  for (const key of [...new Set(Object.values(TAB_DEFINITIONS).flatMap(definition => definition.filters))]) {
     if (filters[key]?.length) items = items.filter(item => filters[key].includes(item[key]));
   }
   if (filters.month != null) {

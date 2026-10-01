@@ -1,5 +1,5 @@
 import { DATA_MAP } from './data.js';
-import { TAB_DEFINITIONS, TABS, CREATURE_TABS, monthsForHemisphere, hoursForMonth } from './schema.js';
+import { TAB_DEFINITIONS, TABS, CREATURE_TABS, COLLECTIBLE_TABS, monthsForHemisphere, hoursForMonth } from './schema.js';
 import { escapeHtml, showToast, rememberFocus } from './ui.js';
 import { createCollectionController } from './collection.js';
 import { createBackupActions } from './backup.js';
@@ -83,7 +83,7 @@ function bindHemisphereButtons(root){
 // lives in a wrapper rather than being assigned onto the creature itself:
 // mutating the objects in DATA_MAP would make data.js's shape depend on
 // app.js having run, which leaks into anything else reading that data.
-const ALL_DATA = CONFIG.TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
+const ALL_DATA = COLLECTIBLE_TABS.flatMap(type => DATA_MAP[type].map(item => ({ type, item })));
 
 // Only current catalogue IDs contribute to progress; unknown IDs remain in
 // storage and backups so an older page cannot erase a newer catalogue.
@@ -184,7 +184,7 @@ function filteredItems(tab) {
     filters: state.filters[tab],
     hemisphere: state.hemisphere,
     collected: state.collected,
-    sort: !TAB_DEFINITIONS[tab].seasonal && state.sort.key === 'price' ? { key: null, dir: 'asc' } : state.sort
+    sort: ((!TAB_DEFINITIONS[tab].seasonal && state.sort.key === 'price') || (TAB_DEFINITIONS[tab].collectible === false && state.sort.key === 'collected')) ? { key: null, dir: 'asc' } : state.sort
   });
 }
 
@@ -203,6 +203,13 @@ function renderProgress() {
   const allCollected = ALL_DATA.filter(x => state.collected.has(x.item.id)).length;
   const allPct = allTotal > 0 ? (allCollected/allTotal*100).toFixed(1) : 0;
   document.getElementById('collectionTitle').textContent = TAB_NAMES[state.activeTab] + '图鉴';
+  const collectible = TAB_DEFINITIONS[state.activeTab].collectible !== false;
+  document.getElementById('progressSection').hidden = !collectible;
+  document.getElementById('dataBar').hidden = !collectible;
+  if (!collectible) {
+    document.getElementById('progressSection').replaceChildren();
+    return;
+  }
   document.getElementById('progressSection').innerHTML =
     '<div><div class="progress-text"><span class="progress-label">本类已收集</span><span class="progress-pct">'+collected+' / '+total+'<small>'+pct+'%</small></span></div>' +
     '<div class="progress-bar" role="progressbar" aria-label="'+TAB_NAMES[state.activeTab]+'收集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><div class="progress-fill" style="width:'+pct+'%"></div></div></div>' +
@@ -313,10 +320,10 @@ function filterSummary() {
     if (f.month != null) parts.push(f.month + '月');
     parts.push(f.hour == null ? '任意时段' : f.hour === 'all' ? '全天出现' : f.hour + '时');
   }
-  if (f.status !== 'all') parts.push(CONFIG.STATUS_OPTS.find(([value]) => value === f.status)[1]);
+  if (f.status && f.status !== 'all') parts.push(CONFIG.STATUS_OPTS.find(([value]) => value === f.status)[1]);
   const selected = TAB_DEFINITIONS[state.activeTab].filters.flatMap(key => f[key]);
   if (selected.length) parts.push(selected.length === 1 ? selected[0] : selected.length + '项条件');
-  return parts.join(' · ') || '全部作品';
+  return parts.join(' · ') || (state.activeTab === 'villager' ? '全部小动物' : '全部作品');
 }
 
 function renderFilters() {
@@ -336,17 +343,20 @@ function renderFilters() {
   html += '</div></div>';
   }
 
-  html += '<div class="filter-row"><span class="filter-label">收集状态</span><div class="filter-options">';
-  for (const [val,label] of CONFIG.STATUS_OPTS) {
-    html += '<button type="button" class="filter-btn'+(f.status===val?' active':'')+'" data-filter="status" data-value="'+val+'" aria-pressed="'+(f.status===val)+'">'+label+'</button>';
-  }
-  html += '</div></div>';
+  if (definition.collectible !== false) {
+    html += '<div class="filter-row"><span class="filter-label">收集状态</span><div class="filter-options">';
+    for (const [val,label] of CONFIG.STATUS_OPTS) {
+      html += '<button type="button" class="filter-btn'+(f.status===val?' active':'')+'" data-filter="status" data-value="'+val+'" aria-pressed="'+(f.status===val)+'">'+label+'</button>';
+    }
+    html += '</div></div>';
 
-  for (const [key, label] of [['artType', '艺术类型'], ['authenticity', '真伪情况'], ['acquisition', '获取方式']]) {
+  }
+
+  for (const [key, label] of [['artType', '艺术类型'], ['authenticity', '真伪情况'], ['acquisition', '获取方式'], ['species', '种族'], ['gender', '性别'], ['personality', '性格'], ['birthdayMonth', '出生月份'], ['hobby', '爱好'], ['collaboration', '联动']]) {
     if (!definition.filters.includes(key)) continue;
     html += '<div class="filter-row"><span class="filter-label">'+label+'</span><div class="filter-options">';
     for (const value of getFilterOptions(DATA_MAP, tab, key)) {
-      html += '<button type="button" class="filter-btn'+(f[key].includes(value)?' active':'')+'" data-filter="'+key+'" data-value="'+value+'" aria-pressed="'+f[key].includes(value)+'">'+value+'</button>';
+      html += '<button type="button" class="filter-btn'+(f[key].includes(value)?' active':'')+'" data-filter="'+key+'" data-value="'+escapeHtml(value)+'" aria-pressed="'+f[key].includes(value)+'">'+escapeHtml(value)+'</button>';
     }
     html += '</div></div>';
   }
@@ -510,6 +520,7 @@ function renderList() { listView.render(); }
 // Bulk actions record only ids whose state actually changed. Undo restores an
 // id only while it still has the bulk result, so a later single-row edit wins.
 async function bulkSetCollected(add) {
+  if (TAB_DEFINITIONS[state.activeTab].collectible === false) return;
   if (collection.isSaving) return;
   if (listView.filtered.length === 0) return;
   const verb = add ? '标记' : '取消标记';

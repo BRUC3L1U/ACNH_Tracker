@@ -2,6 +2,7 @@ import { TAB_DEFINITIONS, monthsForHemisphere } from './schema.js';
 import { getCollectionAccess, getAvailabilityLabel } from './core.js';
 import { escapeHtml } from './ui.js';
 import { buildMusicRow } from './music-view.js';
+import { buildVillagerRow } from './villager-view.js';
 import { buildArtRow } from './art-view.js';
 import { createImageFrame } from './image-view.js';
 
@@ -75,17 +76,19 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
     // The delegated handler ignores repeated activation until saving ends.
     const busyAttribute = ' aria-disabled="'+isSaving()+'"';
     let html = '';
-    CONFIG.SORT_KEYS.filter(sk => TAB_DEFINITIONS[state.activeTab].seasonal || sk.key !== 'price').forEach(sk => {
+    CONFIG.SORT_KEYS.filter(sk => (TAB_DEFINITIONS[state.activeTab].seasonal || sk.key !== 'price') && (TAB_DEFINITIONS[state.activeTab].collectible !== false || sk.key !== 'collected')).forEach(sk => {
       const arrow = state.sort.key === sk.key ? (state.sort.dir==='asc'?' ▲':' ▼') : '';
       const active = state.sort.key === sk.key;
       const current = active ? '，当前'+(state.sort.dir==='asc'?'升序':'降序') : '';
       html += '<button type="button" class="sort-btn" data-sort="'+sk.key+'" aria-pressed="'+active+'" aria-label="按'+sk.label+'排序'+current+'">'+sk.label+arrow+'</button>';
     });
     html += '<span style="flex:1"></span>';
-    html += '<span class="save-status" role="status">'+(isSaving() ? '正在保存…' : '')+'</span>';
+    if (TAB_DEFINITIONS[state.activeTab].collectible !== false) {
+      html += '<span class="save-status" role="status">'+(isSaving() ? '正在保存…' : '')+'</span>';
+      html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+busyAttribute+'>全标</button>';
+      html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
+    }
     document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
-    html += '<span class="bulk-actions"><button type="button" class="data-btn" id="markAllVisible"'+editDisabled+busyAttribute+'>全标</button>';
-    html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
     document.getElementById('listHeader').innerHTML = html;
   }
 
@@ -126,16 +129,18 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
     for (const item of filtered) {
       let el = rowCache.get(item.id);
       if (!el) {
-        el = tab === 'art' ? buildArtRow(item) : tab === 'music' ? buildMusicRow(item) : buildRow(item, tab, northern, curMon);
+        el = tab === 'art' ? buildArtRow(item) : tab === 'music' ? buildMusicRow(item) : tab === 'villager' ? buildVillagerRow(item) : buildRow(item, tab, northern, curMon);
         rowCache.set(item.id, el);
       }
-      const pending = pendingValue(item.id);
-      const collected = pending === undefined ? state.collected.has(item.id) : pending;
-      el.setAttribute('aria-busy', pending !== undefined);
-      el.classList.toggle('collected', collected);
       const checkbox = el.querySelector('.creature-checkbox');
-      checkbox.checked = collected;
-      checkbox.disabled = !canEdit;
+      if (checkbox) {
+        const pending = pendingValue(item.id);
+        const collected = pending === undefined ? state.collected.has(item.id) : pending;
+        el.setAttribute('aria-busy', pending !== undefined);
+        el.classList.toggle('collected', collected);
+        checkbox.checked = collected;
+        checkbox.disabled = !canEdit;
+      }
       frag.appendChild(el);
     }
     rows.replaceChildren(frag);
@@ -143,7 +148,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
       focusedRowElement.focus({ preventScroll: true });
     } else if (focusedId) {
       const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
-        || rows.querySelectorAll('.creature-checkbox')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
+        || rows.querySelectorAll('.creature-checkbox, .villager-item .art-source-link')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
       next?.focus({ preventScroll: true });
     }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();

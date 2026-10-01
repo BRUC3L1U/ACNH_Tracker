@@ -112,14 +112,16 @@ export async function testInteractionBrowser(browser) {
   await check('all phone categories, expanded filters and import dialog remain usable', async page => {
     for (const width of [320,375]) {
       await page.setViewport(width, 812);
-      for (const tab of ['fish','bug','sea','art','music']) {
+      for (const tab of ['fish','bug','sea','art','music','villager']) {
         await page.click('[data-tab="'+tab+'"]');
         await page.click('#filterToggle');
         assert.equal(await page.evaluate('document.querySelector("#filterToggle").getAttribute("aria-expanded")'), 'true');
         assert.equal(await page.evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+        if (tab !== 'villager') {
         await page.click('[data-filter="status"][data-value="collected"]');
         assert.ok(await page.evaluate('!!document.querySelector(".empty-state")'));
         await page.click('[data-filter="status"][data-value="all"]');
+        } else assert.equal(await page.evaluate('document.querySelectorAll(".villager-item").length'),417);
         await page.click('#filterToggle');
         assert.ok(await page.evaluate('document.querySelectorAll(".creature-item").length > 0'));
       }

@@ -1,8 +1,8 @@
 # ACNH Tracker
 
-《集合啦！动物森友会》生物、艺术品与唱片收集清单。查当前能抓什么，辨别艺术品真伪，记下每一次收获。
+《集合啦！动物森友会》生物、艺术品、唱片与小动物收集清单。查当前能抓什么，辨别艺术品真伪，记下每一次收获。
 
-收录 80 种鱼、80 种昆虫、40 种海洋生物、43 件艺术品和 107 张唱片。生物图鉴支持南北半球。无需注册，下载项目后即可在浏览器中使用，记录保存在本机。
+收录 80 种鱼、80 种昆虫、40 种海洋生物、43 件艺术品、107 张唱片和 417 位小动物居民资料。生物图鉴支持南北半球。无需注册，下载项目后即可在浏览器中使用，记录保存在本机。
 
 ## 开始使用
 
@@ -93,6 +93,7 @@ npm run check
 | `core.js` | 筛选、校验、迁移等可独立测试的逻辑 |
 | `data.js`、`schema.js` | 图鉴数据入口、类别定义和半球月份换算 |
 | `music-data.js`、`music-view.js` | 唱片资料、封面和获取说明 |
+| `villager-data.js`、`villager-view.js` | 小动物资料、立绘、生日与口头禅 |
 | `art-data.js`、`art-view.js` | 艺术品资料、图片链接和鉴伪展示 |
 | `scripts/`、`tests/` | 构建脚本与自动化测试 |
 
@@ -103,6 +104,12 @@ npm run check
 `hours` 中的每个整数代表从该整点开始的一小时，结束时刻不包含在内。`northSeasons` 表示按北半球月份划分的不同出现时段，顶层 `hours` 为这些时段的并集。具体月份使用 `hoursForMonth()`，不要直接读取并集来判断当前是否出现。
 
 生物时段按 Nookipedia 的 New Horizons [鱼类](https://nookipedia.com/wiki/Fish/New_Horizons)、[昆虫](https://nookipedia.com/wiki/Bug/New_Horizons)、[海洋生物](https://nookipedia.com/wiki/Sea_creature/New_Horizons)资料核对；BWIKI 的部分小时枚举包含结束小时，部分鱼类没有拆分季节，故没有直接沿用这些枚举。`tests/fixtures/critter-times.json` 保存独立的来源时间区间，回归测试覆盖 200 种生物在两个半球、12 个月、24 小时及全天筛选下的结果。
+
+### 小动物资料来源
+
+收录 417 位可入住居民，按种族、性别、性格（含 A/B 型）、出生月份、爱好和联动组合筛选。展示中英文名、立绘、生日和初始口头禅；支持名称排序。小动物仅用于浏览和筛选，不提供标记、收集进度或备份，不参与月份、时段和今日可捕捉。原有收集图鉴仍为 350 项。
+
+以 [BWIKI 小动物图鉴](https://wiki.biligame.com/dongsen/小动物图鉴)为主要来源，与社区 [ACNH 原始数据表](https://docs.google.com/spreadsheets/d/13d_LAJPlxMa_DubPTuirkIV4DERBMXbrWQsmSh8ReK4/edit)、[中文翻译表](https://docs.google.com/spreadsheets/d/1MMbsvDfu59OY9YBEAfHhFJ6O8vRTllNFgMrX7RBZuyI/edit)逐条核对（2026-10-01）。补入任天堂确认的 4 位联动居民，资料与图片取自 Nookipedia。去除重复、空白及非居民条目，10 处口头禅差异按原始简体中文翻译表修正。完整来源和处理说明见 [数据核对记录](docs/villager-sources.md)。图片权利归原权利人所有。
 
 ### 艺术品资料来源
 

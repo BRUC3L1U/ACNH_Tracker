@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ART_DATA } from '../art-data.js';
 import { DATA_MAP } from '../data.js';
-import { CREATURE_TABS } from '../schema.js';
+import { COLLECTIBLE_TABS, CREATURE_TABS } from '../schema.js';
 import { applyFilters, makeFilters, normalizeUIState, parseBackup, serializeBackup } from '../core.js';
 
-const knownIds = new Set(Object.values(DATA_MAP).flat().map(item => item.id));
+const knownIds = new Set(COLLECTIBLE_TABS.flatMap(tab => DATA_MAP[tab]).map(item => item.id));
 const query = filters => ({ filters, hemisphere: 'south', collected: new Set(['art_001']), sort: { key: 'name', dir: 'asc' } });
 
 test('art catalogue has 43 stable identities and complete genuine/fake information', () => {

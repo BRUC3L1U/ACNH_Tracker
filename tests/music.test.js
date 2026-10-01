@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MUSIC_DATA } from '../music-data.js';
 import { DATA_MAP } from '../data.js';
-import { CREATURE_TABS } from '../schema.js';
+import { COLLECTIBLE_TABS, CREATURE_TABS } from '../schema.js';
 import { makeFilters, applyFilters, normalizeUIState, parseBackup, serializeBackup } from '../core.js';
 
 test('music catalogue has 107 unique collectible records and correct acquisition boundaries', () => {
@@ -36,7 +36,7 @@ test('music filters compose acquisition and collection without seasons', () => {
 });
 
 test('old and mixed backups preserve records after music catalogue expansion', () => {
-  const ids = new Set(Object.values(DATA_MAP).flat().map(x => x.id));
+  const ids = new Set(COLLECTIBLE_TABS.flatMap(tab => DATA_MAP[tab]).map(x => x.id));
   for (const records of [new Set(['fish_001','art_001']),new Set(['fish_001','music_002','art_001','future_001']),ids]) {
     assert.deepEqual(parseBackup(serializeBackup(records),ids).collected, records);
   }
