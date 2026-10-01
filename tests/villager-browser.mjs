@@ -6,6 +6,7 @@ export async function testVillagerBrowser(browser) {
   await page.blockUrls(['*patchwiki.biligame.com*','*dodo.ac*']);
   await page.evaluate(`localStorage.clear();localStorage.setItem('acnh_collected','["fish_001","art_001","music_107","future_001"]');localStorage.setItem('acnh_ui',JSON.stringify({activeTab:'fish',filters:{fish:{month:9,hour:7,hourManual:true}},sort:{key:'collected',dir:'desc'}}))`);
   await page.reload();
+  await page.setViewport(800,493);
   await page.click('[data-tab="villager"]');
   const stored = await page.evaluate('localStorage.getItem("acnh_collected")');
   assert.equal(await page.evaluate('document.querySelectorAll(".villager-item").length'),417);
