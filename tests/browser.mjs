@@ -28,7 +28,22 @@ try {
         type, id: event.target.closest('.creature-item')?.dataset.id
       }), true);
     }`);
-  await Promise.all([click(a, ids[0]), click(b, ids[1])]);
+  // Native input shares one foreground page. Finish each pointer gesture, but
+  // hold the write lock so both pages queue saves against the same empty state.
+  await a.evaluate(`window.concurrentLockHeld = false;
+    window.concurrentLockDone = navigator.locks.request('acnh_collected:write', () => new Promise(resolve => {
+      window.releaseConcurrentLock = resolve;
+      window.concurrentLockHeld = true;
+    })); void 0;`);
+  await a.waitFor('window.concurrentLockHeld');
+  try {
+    await click(a, ids[0]);
+    await click(b, ids[1]);
+    await a.waitFor(`(async () => (await navigator.locks.query()).pending.filter(lock => lock.name === 'acnh_collected:write').length === 2)()`);
+    assert.equal(await a.evaluate('localStorage.getItem("acnh_collected")'), null);
+  } finally {
+    await a.evaluate('window.releaseConcurrentLock(); window.concurrentLockDone');
+  }
   try {
     await a.waitFor('JSON.parse(localStorage.getItem("acnh_collected") || "[]").length === 2');
   } catch (error) {
@@ -37,7 +52,7 @@ try {
         events: concurrentInputEvents,
         collected: localStorage.getItem('acnh_collected'),
         checked: [...document.querySelectorAll('.creature-checkbox:checked')].map(el => el.dataset.id),
-        message: document.querySelector('#toast').textContent
+        message: document.querySelector('#toast')?.textContent || ''
       })`));
     }
     throw error;
@@ -46,7 +61,7 @@ try {
   await b.waitFor('document.querySelectorAll(".creature-checkbox:checked").length === 2');
   await a.reload();
   assert.equal(await a.evaluate('document.querySelectorAll(".creature-checkbox:checked").length'), 2);
-  console.log('PASS simultaneous tabs, live synchronization and reload persistence');
+  console.log('PASS queued cross-tab writes, live synchronization and reload persistence');
 
   const stored = page => page.evaluate('JSON.parse(localStorage.getItem("acnh_collected") || "[]").sort()');
   const importFile = async (page, collected) => {

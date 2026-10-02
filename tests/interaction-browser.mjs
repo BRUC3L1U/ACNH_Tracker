@@ -21,9 +21,9 @@ export async function testInteractionBrowser(browser) {
       await other.waitFor('document.querySelectorAll(".creature-checkbox:checked").length === 80');
       const id = await other.evaluate('document.querySelector(".creature-checkbox").dataset.id');
       await other.click('.creature-item .check-box');
-      await other.waitFor('!document.querySelector(".creature-checkbox").checked');
+      await other.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).length === 79 && document.querySelector(".creature-item").getAttribute("aria-busy") === "false"');
       await other.click('.creature-item .check-box');
-      await other.waitFor('document.querySelector(".creature-checkbox").checked');
+      await other.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).length === 80 && document.querySelector(".creature-item").getAttribute("aria-busy") === "false"');
       await page.click('.toast-action');
       await page.waitFor('JSON.parse(localStorage.getItem("acnh_collected")).length === 1');
       assert.deepEqual(await page.evaluate('JSON.parse(localStorage.getItem("acnh_collected"))'), [id]);
