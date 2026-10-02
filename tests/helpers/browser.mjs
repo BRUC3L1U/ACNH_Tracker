@@ -9,7 +9,7 @@ export async function launchBrowser(root) {
   const server = createServer(async (req, res) => {
     try {
       const file = resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
-      if (!file.startsWith(root + sep)) throw new Error('Invalid path');
+      if (file !== root && !file.startsWith(root + sep)) throw new Error('Invalid path');
       const target = file.endsWith(sep) || file === root ? join(file, 'index.html') : file;
       res.setHeader('Content-Type', target.endsWith('.js') ? 'text/javascript' : 'text/html');
       res.end(await readFile(target));
@@ -74,7 +74,7 @@ export async function launchBrowser(root) {
       child.stdio[3].write(JSON.stringify({ id, method, params, sessionId }) + '\0');
     });
   }
-  async function page(url = 'http://127.0.0.1:' + server.address().port + '/index.html') {
+  async function page(url = 'http://127.0.0.1:' + server.address().port + '/') {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     // Evaluate actual DOM interactions in an isolated browser profile.
@@ -128,7 +128,13 @@ export async function launchBrowser(root) {
         imageResponses.set(sessionId, (await readFile(join(root, 'favicon.png'))).toString('base64'));
         await send('Fetch.enable', { patterns: [{urlPattern:'https://patchwiki.biligame.com/*'}] }, sessionId);
       },
-      setViewport: (width, height = 900) => send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId),
+      setViewport: async (width, height = 900) => {
+        await send('Page.bringToFront', {}, sessionId);
+        await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
+        // Resizing can adjust the focused element's scroll position on the next
+        // frame. Let layout settle before computing native click coordinates.
+        await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+      },
       blockUrls: async urls => {
         await send('Network.enable', {}, sessionId);
         await send('Network.setBlockedURLs', { urls }, sessionId);

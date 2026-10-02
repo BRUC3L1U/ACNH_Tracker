@@ -7,6 +7,7 @@ import { testArtBrowser } from './art-browser.mjs';
 import { testRegressionBrowser } from './regression-browser.mjs';
 import { testInteractionBrowser } from './interaction-browser.mjs';
 import { testAuditBrowser } from './audit-browser.mjs';
+import { testReviewBrowser } from './review-browser.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const browser = await launchBrowser(root);
@@ -131,4 +132,5 @@ try {
   await testInteractionBrowser(browser);
   await testRegressionBrowser(browser);
   await testAuditBrowser(browser);
+  await testReviewBrowser(browser);
 } finally { await browser.close(); }

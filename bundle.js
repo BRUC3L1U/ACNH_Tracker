@@ -10980,6 +10980,7 @@ function createImageFrame(url, alt, className, errorClass, size = {}) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
     image.addEventListener('error', () => {
+      const restoreFocus = frame.contains(document.activeElement);
       frame.dataset.imageFailed = 'true';
       const fallback = document.createElement('span');
       fallback.className = errorClass + ' image-fallback';
@@ -10998,6 +10999,7 @@ function createImageFrame(url, alt, className, errorClass, size = {}) {
       });
       fallback.append(message, retry);
       frame.replaceChildren(fallback);
+      if (restoreFocus) retry.focus({ preventScroll: true });
     }, { once: true });
     image.src = url;
     if (size.link) {
@@ -11131,6 +11133,7 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving
   // The bulk buttons act on whatever the last render filtered down to, and they
   // are bound once via delegation rather than re-bound per render.
   let lastFiltered = [];
+  let lastHeaderHtml = '';
 
   function buildRow(item, tab, northern, curMon) {
     const checkboxId = 'collected-' + item.id;
@@ -11195,7 +11198,11 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving
       html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
     }
     document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
-    document.getElementById('listHeader').innerHTML = html;
+    // Unchanged controls must survive a storage event between pointer down/up.
+    if (html !== lastHeaderHtml) {
+      document.getElementById('listHeader').innerHTML = html;
+      lastHeaderHtml = html;
+    }
   }
 
   function renderList() {
@@ -11216,7 +11223,10 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving
     if (filtered.length === 0) {
       rows.innerHTML = '<div class="empty-state">没有符合条件的条目，请调整筛选条件 🔍</div>';
       if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-      else if (focusedAction) document.getElementById(focusedAction)?.focus();
+      else if (focusedAction) {
+        const action = document.getElementById(focusedAction);
+        (action?.disabled ? document.getElementById('filterToggle') : action)?.focus();
+      }
       else if (focusedId) document.getElementById('filterToggle').focus();
       return;
     }
@@ -11229,9 +11239,13 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving
       rowCacheSig = sig;
     }
 
-    // Appending an existing node to the fragment detaches it from the old list,
-    // so reorders and removals fall out of rebuilding this in filtered order.
-    const frag = document.createDocumentFragment();
+    // Keep surviving rows connected. Detaching every cached row cancels native
+    // label clicks when another page updates storage during the pointer gesture.
+    const visibleIds = new Set(filtered.map(item => item.id));
+    for (const child of [...rows.children]) {
+      if (!visibleIds.has(child.dataset.id) || rowCache.get(child.dataset.id) !== child) child.remove();
+    }
+    let nextRow = rows.firstChild;
     for (const item of filtered) {
       let el = rowCache.get(item.id);
       if (!el) {
@@ -11247,18 +11261,22 @@ function createListView({ state, filteredItems, isLoadFailed, sortKeys, isSaving
         checkbox.checked = collected;
         checkbox.disabled = !canEdit;
       }
-      frag.appendChild(el);
+      if (el !== nextRow) rows.insertBefore(el, nextRow);
+      nextRow = el.nextSibling;
     }
-    rows.replaceChildren(frag);
     if (focusedRowElement?.isConnected && !focusedRowElement.disabled) {
       focusedRowElement.focus({ preventScroll: true });
     } else if (focusedId) {
-      const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
-        || rows.querySelectorAll('.creature-checkbox, .villager-item .art-source-link')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
-      next?.focus({ preventScroll: true });
+      const next = rows.querySelector('.creature-checkbox:not(:disabled)[data-id="'+focusedId+'"]')
+        || rows.querySelectorAll('.creature-checkbox:not(:disabled), .villager-item .art-source-link')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)]
+        || document.getElementById('filterToggle');
+      next.focus({ preventScroll: true });
     }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-    else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
+    else if (focusedAction) {
+      const action = document.getElementById(focusedAction);
+      (action?.disabled ? document.getElementById('filterToggle') : action)?.focus({ preventScroll: true });
+    }
   }
 
   return { render: renderList, get filtered() { return lastFiltered; } };
@@ -11296,7 +11314,7 @@ function toggleArrayFilter(name, value){
   idx >= 0 ? arr.splice(idx,1) : arr.push(value);
 }
 
-// Shared by the today panel's per-render buttons and the filter bar's
+// Shared by the today panel's persistent buttons and the filter bar's
 // delegated listener. renderAll() covers every surface that shows hemisphere
 // state; the applyFilters recount is just for the toast.
 function handleHemisphereChange(hemi){
@@ -11320,10 +11338,8 @@ function hemisphereButtons(activeClass){
        + '<button type="button" id="'+activeClass+'-south" class="'+activeClass+(state.hemisphere==='south'?' active':'')+'" data-hemi="south" aria-pressed="'+(state.hemisphere==='south')+'">南半球</button>';
 }
 
-// The today panel re-renders on an hourly cadence, so its hemisphere buttons
-// are (re)bound per render; filter-bar hemisphere clicks go through the
-// delegated #filterBar listener instead. Both funnel into
-// handleHemisphereChange.
+// Bind the today panel once; filter-bar hemisphere clicks go through the
+// delegated #filterBar listener. Both funnel into handleHemisphereChange.
 function bindHemisphereButtons(root){
   root.querySelectorAll('[data-hemi]').forEach(btn=>{
     btn.addEventListener('click', ()=>handleHemisphereChange(btn.dataset.hemi));
@@ -11470,7 +11486,6 @@ function renderProgress() {
 
 function renderTodayPanel() {
   const panel = document.getElementById('todayPanel');
-  const returnFocus = rememberFocus(panel.contains(document.activeElement) ? document.activeElement : null);
   const seasonal = TAB_DEFINITIONS[state.activeTab].seasonal;
   panel.hidden = !seasonal;
   if (!seasonal) return;
@@ -11497,63 +11512,71 @@ function renderTodayPanel() {
       + item.price + ' 铃钱</span></div>';
   }
 
-  let html = '<button type="button" class="today-header'+(state.todayOpen?' open':'')+'" id="todayHeader" aria-expanded="'+state.todayOpen+'" aria-controls="todayBody"><span class="today-heading"><span class="arrow" aria-hidden="true">▶</span> 今日可捕捉 <span class="today-date">'+monStr+' · '+hour+'时</span></span><span class="today-count">'+nowAvailable.length+' 种生物可捕捉</span></button>';
-  html += '<div class="today-body'+(state.todayOpen?' open':'')+'" id="todayBody"'+(state.todayOpen?'':' hidden')+'>';
-  html += '<div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')
-    + '<label class="today-toggle"><input type="checkbox" id="todayUncollected"'+(state.todayUncollectedOnly?' checked':'')+'>只看未收集</label></div>';
-
+  // Collection and clock updates replace only the non-interactive result rows.
+  // Keeping the controls connected preserves clicks and keyboard focus.
+  if (!panel.firstElementChild) {
+    let html = '<button type="button" class="today-header" id="todayHeader" aria-controls="todayBody"><span class="today-heading"><span class="arrow" aria-hidden="true">▶</span> 今日可捕捉 <span class="today-date"></span></span><span class="today-count"></span></button>';
+    html += '<div class="today-body" id="todayBody"><div class="today-info"><span>当前半球：</span>'+hemisphereButtons('hemi-btn')
+      + '<label class="today-toggle"><input type="checkbox" id="todayUncollected">只看未收集</label></div>';
+    for (const t of CREATURE_TABS) {
+      html += '<h4><button type="button" id="todayGroupToggle-'+t+'" class="today-group-header" data-group="'+t+'" aria-controls="todayGroup-'+t+'"><span class="arrow" aria-hidden="true">▶</span><span class="today-group-label"></span></button></h4>'
+        + '<div class="today-group-body" id="todayGroup-'+t+'"></div>';
+    }
+    panel.innerHTML = html + '</div>';
+    document.getElementById('todayHeader').addEventListener('click', () => {
+      state.todayOpen = !state.todayOpen;
+      saveUIState();
+      renderTodayPanel();
+    });
+    document.getElementById('todayUncollected').addEventListener('change', e => {
+      state.todayUncollectedOnly = e.target.checked;
+      saveUIState();
+      renderTodayPanel();
+    });
+    panel.querySelectorAll('.today-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const group = header.dataset.group;
+        state.todayGroups[group] = !state.todayGroups[group];
+        saveUIState();
+        renderTodayPanel();
+      });
+    });
+    bindHemisphereButtons(panel);
+  }
+  const header = document.getElementById('todayHeader');
+  header.classList.toggle('open', state.todayOpen);
+  header.setAttribute('aria-expanded', state.todayOpen);
+  panel.querySelector('.today-date').textContent = monStr+' · '+hour+'时';
+  panel.querySelector('.today-count').textContent = nowAvailable.length+' 种生物可捕捉';
+  const body = document.getElementById('todayBody');
+  body.classList.toggle('open', state.todayOpen);
+  body.hidden = !state.todayOpen;
+  document.getElementById('todayUncollected').checked = state.todayUncollectedOnly;
+  panel.querySelectorAll('[data-hemi]').forEach(button => {
+    const active = button.dataset.hemi === state.hemisphere;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
   for (const t of CREATURE_TABS) {
     const items = byType[t];
     const open = state.todayGroups[t];
-    html += '<h4><button type="button" id="todayGroupToggle-'+t+'" class="today-group-header'+(open?' open':'')+'" data-group="'+t+'" aria-expanded="'+open+'" aria-controls="todayGroup-'+t+'"><span class="arrow" aria-hidden="true">▶</span> '+TAB_NAMES[t]+' （'+items.length+'）</button></h4>';
-    html += '<div class="today-group-body'+(open?' open':'')+'" id="todayGroup-'+t+'"'+(open?'':' hidden')+'>';
-    if (items.length === 0) {
-      html += '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>';
-    } else {
-      items.forEach(({ item }) => {
+    const groupHeader = document.getElementById('todayGroupToggle-'+t);
+    groupHeader.classList.toggle('open', open);
+    groupHeader.setAttribute('aria-expanded', open);
+    groupHeader.querySelector('.today-group-label').textContent = TAB_NAMES[t]+' （'+items.length+'）';
+    const groupBody = document.getElementById('todayGroup-'+t);
+    groupBody.classList.toggle('open', open);
+    groupBody.hidden = !open;
+    groupBody.innerHTML = items.length === 0
+      ? '<div class="today-item" style="color:var(--color-text-muted)">当前时间没有可捕捉的'+TAB_NAMES[t]+'</div>'
+      : items.map(({ item }) => {
         let tags = '';
         if (t !== 'sea') tags += '<span class="tag tag-location">'+escapeHtml(item.location)+'</span>';
         if (item.shadowSize) tags += '<span class="tag tag-shadow">'+escapeHtml(item.shadowSize)+'</span>';
-        if (item.weather && item.weather !== '无限制') {
-          tags += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
-        }
-        html += todayRow(item, tags);
-      });
-    }
-    html += '</div>';
+        if (item.weather && item.weather !== '无限制') tags += '<span class="tag tag-weather">'+escapeHtml(item.weather)+'</span>';
+        return todayRow(item, tags);
+      }).join('');
   }
-  html += '</div>';
-
-  document.getElementById('todayPanel').innerHTML = html;
-
-  document.getElementById('todayHeader').addEventListener('click', () => {
-    state.todayOpen = !state.todayOpen;
-    saveUIState();
-    renderTodayPanel();
-    document.getElementById('todayHeader').focus();
-  });
-  document.getElementById('todayUncollected').addEventListener('change', e => {
-    state.todayUncollectedOnly = e.target.checked;
-    saveUIState();
-    renderTodayPanel();
-    document.getElementById('todayUncollected').focus();
-  });
-  // Group headers toggle in place (no full re-render); state.todayGroups
-  // keeps the choice in sync for the next scheduled panel refresh.
-  document.querySelectorAll('#todayPanel .today-group-header').forEach(h => {
-    h.addEventListener('click', () => {
-      const g = h.dataset.group;
-      state.todayGroups[g] = !state.todayGroups[g];
-      h.classList.toggle('open', state.todayGroups[g]);
-      h.setAttribute('aria-expanded', state.todayGroups[g]);
-      const body = document.getElementById('todayGroup-' + g);
-      body.classList.toggle('open', state.todayGroups[g]);
-      body.hidden = !state.todayGroups[g];
-      saveUIState();
-    });
-  });
-  bindHemisphereButtons(panel);
-  returnFocus();
 }
 
 // No name-search box: deliberate, not an oversight. Search was decided
@@ -11834,20 +11857,37 @@ function renderAll() {
 function renderDataBar() {
   const access = getCollectionAccess(collection.loadFailed);
   const bar = document.getElementById('dataBar');
-  const returnFocus = rememberFocus(bar.contains(document.activeElement) ? document.activeElement : null);
-  const menuOpen = document.getElementById('backupMenu')?.open || !access.canExport;
-  const notice = access.canExport ? ''
-    : '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
-  document.getElementById('dataBar').innerHTML =
-    '<details class="backup-menu" id="backupMenu"'+(menuOpen?' open':'')+'><summary id="backupToggle">备份</summary><div class="backup-actions">' +
-    (notice ? '<span class="storage-mode-note" id="storageModeNote" role="note">'+escapeHtml(notice)+'</span>' : '') +
-    '<button type="button" class="data-btn" id="exportBtn"'+(!access.canExport?' disabled aria-describedby="storageModeNote"':collection.isSaving?' disabled':'')+'>导出收集记录</button>' +
-    '<button type="button" class="data-btn" id="importBtn"'+(backup.importInProgress || collection.isSaving?' disabled':'')+'>导入收集记录</button>' +
-    '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
-  document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
-  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
-  document.getElementById('importFile').addEventListener('change', backup.importCollected);
-  returnFocus();
+  const focused = bar.contains(document.activeElement) ? document.activeElement : null;
+  // Preserve the menu and file input, including an in-flight native file picker.
+  if (!bar.firstElementChild) {
+    bar.innerHTML = '<details class="backup-menu" id="backupMenu"><summary id="backupToggle">备份</summary><div class="backup-actions">'
+      + '<button type="button" class="data-btn" id="exportBtn">导出收集记录</button>'
+      + '<button type="button" class="data-btn" id="importBtn">导入收集记录</button>'
+      + '<input type="file" id="importFile" accept="application/json" aria-label="选择收集记录 JSON 文件" hidden></div></details>';
+    document.getElementById('exportBtn').addEventListener('click', backup.exportCollected);
+    document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', backup.importCollected);
+  }
+  const exportButton = document.getElementById('exportBtn');
+  exportButton.disabled = !access.canExport || collection.isSaving;
+  document.getElementById('importBtn').disabled = backup.importInProgress || collection.isSaving;
+  let notice = document.getElementById('storageModeNote');
+  if (!access.canExport) {
+    document.getElementById('backupMenu').open = true;
+    if (!notice) {
+      notice = document.createElement('span');
+      notice.id = 'storageModeNote';
+      notice.className = 'storage-mode-note';
+      notice.setAttribute('role', 'note');
+      notice.textContent = '未能加载已有收集记录。为避免生成错误的空备份，导出和修改已暂停；可导入有效备份恢复。';
+      exportButton.before(notice);
+    }
+    exportButton.setAttribute('aria-describedby', 'storageModeNote');
+  } else {
+    notice?.remove();
+    exportButton.removeAttribute('aria-describedby');
+  }
+  if (focused?.disabled) document.getElementById('backupToggle').focus({ preventScroll: true });
 }
 
 document.getElementById('navTabs').addEventListener('click', e => {

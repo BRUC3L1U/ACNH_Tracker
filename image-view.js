@@ -22,6 +22,7 @@ export function createImageFrame(url, alt, className, errorClass, size = {}) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
     image.addEventListener('error', () => {
+      const restoreFocus = frame.contains(document.activeElement);
       frame.dataset.imageFailed = 'true';
       const fallback = document.createElement('span');
       fallback.className = errorClass + ' image-fallback';
@@ -40,6 +41,7 @@ export function createImageFrame(url, alt, className, errorClass, size = {}) {
       });
       fallback.append(message, retry);
       frame.replaceChildren(fallback);
+      if (restoreFocus) retry.focus({ preventScroll: true });
     }, { once: true });
     image.src = url;
     if (size.link) {

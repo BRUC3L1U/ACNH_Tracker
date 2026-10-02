@@ -25,6 +25,7 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
   // The bulk buttons act on whatever the last render filtered down to, and they
   // are bound once via delegation rather than re-bound per render.
   let lastFiltered = [];
+  let lastHeaderHtml = '';
 
   function buildRow(item, tab, northern, curMon) {
     const checkboxId = 'collected-' + item.id;
@@ -89,7 +90,11 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
       html += '<button type="button" class="data-btn" id="unmarkAllVisible"'+editDisabled+busyAttribute+'>全取消</button></span>';
     }
     document.getElementById('filterResultCount').textContent = '共 '+count+' 条';
-    document.getElementById('listHeader').innerHTML = html;
+    // Unchanged controls must survive a storage event between pointer down/up.
+    if (html !== lastHeaderHtml) {
+      document.getElementById('listHeader').innerHTML = html;
+      lastHeaderHtml = html;
+    }
   }
 
   function renderList() {
@@ -110,7 +115,10 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
     if (filtered.length === 0) {
       rows.innerHTML = '<div class="empty-state">没有符合条件的条目，请调整筛选条件 🔍</div>';
       if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-      else if (focusedAction) document.getElementById(focusedAction)?.focus();
+      else if (focusedAction) {
+        const action = document.getElementById(focusedAction);
+        (action?.disabled ? document.getElementById('filterToggle') : action)?.focus();
+      }
       else if (focusedId) document.getElementById('filterToggle').focus();
       return;
     }
@@ -123,9 +131,13 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
       rowCacheSig = sig;
     }
 
-    // Appending an existing node to the fragment detaches it from the old list,
-    // so reorders and removals fall out of rebuilding this in filtered order.
-    const frag = document.createDocumentFragment();
+    // Keep surviving rows connected. Detaching every cached row cancels native
+    // label clicks when another page updates storage during the pointer gesture.
+    const visibleIds = new Set(filtered.map(item => item.id));
+    for (const child of [...rows.children]) {
+      if (!visibleIds.has(child.dataset.id) || rowCache.get(child.dataset.id) !== child) child.remove();
+    }
+    let nextRow = rows.firstChild;
     for (const item of filtered) {
       let el = rowCache.get(item.id);
       if (!el) {
@@ -141,18 +153,22 @@ export function createListView({ state, filteredItems, isLoadFailed, sortKeys, i
         checkbox.checked = collected;
         checkbox.disabled = !canEdit;
       }
-      frag.appendChild(el);
+      if (el !== nextRow) rows.insertBefore(el, nextRow);
+      nextRow = el.nextSibling;
     }
-    rows.replaceChildren(frag);
     if (focusedRowElement?.isConnected && !focusedRowElement.disabled) {
       focusedRowElement.focus({ preventScroll: true });
     } else if (focusedId) {
-      const next = rows.querySelector('.creature-checkbox[data-id="'+focusedId+'"]')
-        || rows.querySelectorAll('.creature-checkbox, .villager-item .art-source-link')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)];
-      next?.focus({ preventScroll: true });
+      const next = rows.querySelector('.creature-checkbox:not(:disabled)[data-id="'+focusedId+'"]')
+        || rows.querySelectorAll('.creature-checkbox:not(:disabled), .villager-item .art-source-link')[Math.min(Math.max(focusedIndex, 0), filtered.length - 1)]
+        || document.getElementById('filterToggle');
+      next.focus({ preventScroll: true });
     }
     else if (focusedSort) document.querySelector('.sort-btn[data-sort="'+focusedSort+'"]')?.focus();
-    else if (focusedAction) document.getElementById(focusedAction)?.focus({ preventScroll: true });
+    else if (focusedAction) {
+      const action = document.getElementById(focusedAction);
+      (action?.disabled ? document.getElementById('filterToggle') : action)?.focus({ preventScroll: true });
+    }
   }
 
   return { render: renderList, get filtered() { return lastFiltered; } };
